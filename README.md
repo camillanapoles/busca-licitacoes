@@ -12,22 +12,22 @@ O LicitaBusca possui uma arquitetura escalável para coletar e normalizar dados 
 
 ## Como iniciar o projeto
 
-1. Instale as dependências:
+Instale as dependências:
    ```bash
    npm i
    ```
 
-2. Execute as migrations do banco de dados:
+Execute as migrations do banco de dados:
    ```bash
    npx prisma migrate dev
    ```
 
-3. Popule o banco com dados iniciais (Seed):
+Popule o banco com dados iniciais (Seed):
    ```bash
    npx prisma db seed
    ```
 
-4. Inicie o servidor de desenvolvimento:
+Inicie o servidor de desenvolvimento:
    ```bash
    npm run dev
    ```
@@ -40,6 +40,17 @@ O LicitaBusca possui uma arquitetura escalável para coletar e normalizar dados 
 - **Usuário Comum**
   - E-mail: `usuario@licitabusca.local`
   - Senha: `Usuario123!`
+
+### Prints
+
+### Area do usuário
+<img width="1911" height="917" alt="image" src="https://github.com/user-attachments/assets/205c7dab-d076-4b9c-9df8-78a4abe32930" />
+
+### Dashboard
+<img width="1902" height="916" alt="image" src="https://github.com/user-attachments/assets/54de82a0-5a1a-46b0-915f-aa1048912354" />
+
+### Área do administrador
+<img width="1908" height="922" alt="image" src="https://github.com/user-attachments/assets/0615ebd0-b864-45d3-b9ed-40616656043b" />
 
 ### Fontes Disponíveis
 
