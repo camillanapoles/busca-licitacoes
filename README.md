@@ -33,11 +33,11 @@ Inicie o servidor de desenvolvimento:
    ```
 ## Usuários de Teste
 
-- **Admin**
+**Admin**
   - E-mail: `admin@licitabusca.local`
   - Senha: `Admin123!`
 
-- **Usuário Comum**
+**Usuário Comum**
   - E-mail: `usuario@licitabusca.local`
   - Senha: `Usuario123!`
 
