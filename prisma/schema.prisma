@@ -19,14 +19,18 @@ enum UserStatus {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(USER)
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                              String   @id @default(cuid())
+  name                            String
+  email                           String   @unique
+  passwordHash                    String
+  role                            Role     @default(USER)
+  status                          UserStatus @default(ACTIVE)
+  whatsappNumber                  String?
+  whatsappNotificationsEnabled    Boolean  @default(false)
+  apibrasilBearerTokenEncrypted   String?  @db.Text
+  apibrasilDeviceTokenEncrypted   String?  @db.Text
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
 
   avisos       Aviso[]
   searchLogs   SearchLog[]
@@ -147,6 +151,8 @@ model Fonte {
   nome      String
   codigo    String   @unique
   baseUrl   String?
+  descricao String?  @db.Text
+  config    Json?
   ativo     Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -70,19 +70,19 @@ O LicitaBusca possui uma arquitetura escalável para coletar e normalizar dados 
 
 1.  **PNCP** (Portal Nacional de Contratações Públicas) - *Totalmente Operacional*
 2.  **Compras.gov.br** - *Estruturado (aguardando configuração)*
-3.  **Portal da Transparência / CGU** - *Estruturado (aguardando configuração)*
-4.  **BEC-SP** (Bolsa Eletrônica de Compras de São Paulo) - *Web Service público legado*
-5.  **TCE-SP / AUDESP** - *Integração Fase IV (não é fonte de busca pública)*
+3.  **Portal de Compras Públicas** - *API pública observável, sem autenticação*
+4.  **Portal da Transparência / CGU** - *Estruturado (aguardando configuração)*
+5.  **BEC-SP** (Bolsa Eletrônica de Compras de São Paulo) - *Web Service público legado*
+6.  **TCE-SP / AUDESP** - *Integração Fase IV (não é fonte de busca pública)*
+7.  **TCE-RJ** - *Dados abertos públicos*
+8.  **TCE-RS / LicitaCon** - *Dados abertos em lote*
 
 ### Configuração de Fontes
 
-Para ativar as fontes adicionais, configure as variáveis de ambiente no seu arquivo `.env`:
+As configurações públicas das fontes são gravadas no banco pelo seed (`prisma/seed.ts`) a partir de `src/lib/sources/config.ts`. Rode `npm run db:seed` para criar ou atualizar os registros em `Fonte`.
 
-- **PNCP**: Já configurado por padrão.
-- **Compras.gov.br**: Usa `https://dadosabertos.compras.gov.br` por padrão (opcional sobrescrever `COMPRAS_GOV_BASE_URL`).
-- **Transparência**: Defina `TRANSPARENCIA_BASE_URL`, `TRANSPARENCIA_API_TOKEN` e `TRANSPARENCIA_CODIGO_ORGAO` (código SIAFI do órgão).
-- **BEC-SP**: Usa `https://www.bec.sp.gov.br/BEC_API/API` por padrão (opcional sobrescrever `BEC_SP_API_BASE_URL`). As consultas encerradas usam datas no formato `DDMMYYYY`.
-- **TCE-SP / AUDESP**: Defina `TCE_SP_EMAIL` e `TCE_SP_PASSWORD` para autenticação, ou `TCE_SP_ACCESS_TOKEN` para consultas autenticadas. A API AUDESP não expõe `GET /licitacoes`; use PNCP e BEC-SP para buscar licitações públicas de São Paulo. Os endpoints oficiais cobertos são `/login`, `/recepcao-fase-4/f4/enviar-edital`, `/recepcao-fase-4/f4/enviar-licitacao`, `/recepcao-fase-4/f4/enviar-ata`, `/recepcao-fase-4/f4/enviar-ajuste` e `/f4/consulta/{protocolo}`.
+- **PNCP, Compras.gov.br, Portal de Compras Públicas, BEC-SP, TCE-RJ e TCE-RS**: Já recebem defaults públicos pelo seed.
+- **Transparência e TCE-SP / AUDESP**: ficam cadastradas com campos sensíveis vazios. Preencha token, órgão ou credenciais no cadastro/configuração da fonte quando for usar essas integrações.
 
 ## Painel Administrativo de Coletas
 

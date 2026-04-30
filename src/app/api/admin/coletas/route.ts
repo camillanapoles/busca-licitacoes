@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  let params: { startDate?: Date; endDate?: Date } = {};
+  const params: { startDate?: Date; endDate?: Date } = {};
 
   try {
     const body = await req.json().catch(() => ({}));

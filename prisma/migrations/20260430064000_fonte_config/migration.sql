@@ -1,0 +1,1 @@
+ALTER TABLE `Fonte` ADD COLUMN `descricao` TEXT NULL, ADD COLUMN `config` JSON NULL;

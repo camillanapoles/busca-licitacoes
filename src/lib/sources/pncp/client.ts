@@ -16,18 +16,21 @@
  * - GET /v1/orgaos/{cnpj}/compras/{ano}/{sequencial}/itens — itens de uma compra
  */
 
-export const PNCP_BASE_URL =
-  process.env.PNCP_BASE_URL?.replace(/\/$/, "") ||
-  "https://pncp.gov.br/api/consulta";
-export const PNCP_SWAGGER_URL =
-  process.env.PNCP_SWAGGER_URL ||
-  "https://pncp.gov.br/api/consulta/swagger-ui/index.html";
-export const PNCP_OPENAPI_URL =
-  process.env.PNCP_OPENAPI_URL ||
-  "https://pncp.gov.br/pncp-consulta/v3/api-docs";
-const RETRY_MAX_ATTEMPTS = Number(process.env.PNCP_RETRY_MAX_ATTEMPTS ?? "3");
-const RETRY_BASE_DELAY_MS = Number(process.env.PNCP_RETRY_BASE_DELAY_MS ?? "800");
-const REQUEST_TIMEOUT_MS = Number(process.env.PNCP_REQUEST_TIMEOUT_MS ?? "20000");
+import type { SourceConfig } from "@/lib/sources/types";
+import { sourceConfigNumber, sourceConfigValue } from "@/lib/sources/config";
+
+export const PNCP_BASE_URL = "https://pncp.gov.br/api/consulta";
+export const PNCP_SWAGGER_URL = "https://pncp.gov.br/api/consulta/swagger-ui/index.html";
+export const PNCP_OPENAPI_URL = "https://pncp.gov.br/pncp-consulta/v3/api-docs";
+
+function resolvePncpConfig(config?: SourceConfig) {
+  return {
+    baseUrl: sourceConfigValue(config, "PNCP_BASE_URL", PNCP_BASE_URL).replace(/\/$/, ""),
+    retryMaxAttempts: sourceConfigNumber(config, "PNCP_RETRY_MAX_ATTEMPTS", 3),
+    retryBaseDelayMs: sourceConfigNumber(config, "PNCP_RETRY_BASE_DELAY_MS", 800),
+    requestTimeoutMs: sourceConfigNumber(config, "PNCP_REQUEST_TIMEOUT_MS", 20000),
+  };
+}
 
 // ─── Tipos de Parâmetros ─────────────────────────────────────────────────────
 
@@ -42,6 +45,7 @@ export interface PncpDateParams {
   codigoUnidadeAdministrativa?: string;
   pagina?: number;
   tamanhoPagina?: number;
+  sourceConfig?: SourceConfig;
 }
 
 export interface PncpResponse<T = unknown> {
@@ -113,8 +117,14 @@ class PncpRequestError extends Error {
   }
 }
 
-async function pncpFetch<T>(path: string, params?: Record<string, unknown>): Promise<T> {
-  const url = new URL(`${PNCP_BASE_URL}${path}`);
+async function pncpFetch<T>(
+  path: string,
+  params?: Record<string, unknown>,
+  sourceConfig?: SourceConfig
+): Promise<T> {
+  const { baseUrl, retryMaxAttempts, retryBaseDelayMs, requestTimeoutMs } =
+    resolvePncpConfig(sourceConfig);
+  const url = new URL(`${baseUrl}${path}`);
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -124,14 +134,14 @@ async function pncpFetch<T>(path: string, params?: Record<string, unknown>): Pro
     });
   }
 
-  for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= retryMaxAttempts; attempt++) {
     try {
       const response = await fetch(url.toString(), {
         headers: {
           Accept: "application/json",
         },
         cache: "no-store",
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(requestTimeoutMs),
       });
 
       if (!response.ok) {
@@ -142,7 +152,7 @@ async function pncpFetch<T>(path: string, params?: Record<string, unknown>): Pro
           retryable
         );
 
-        if (!retryable || attempt >= RETRY_MAX_ATTEMPTS) {
+        if (!retryable || attempt >= retryMaxAttempts) {
           console.error(
             `[PNCP] Erro detalhado endpoint=${path} params=${JSON.stringify(
               params ?? {}
@@ -152,9 +162,9 @@ async function pncpFetch<T>(path: string, params?: Record<string, unknown>): Pro
         }
 
         const backoffMs =
-          RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) + Math.floor(Math.random() * 300);
+          retryBaseDelayMs * 2 ** (attempt - 1) + Math.floor(Math.random() * 300);
         console.warn(
-          `[PNCP] Tentativa ${attempt}/${RETRY_MAX_ATTEMPTS} falhou (${response.status}). Retry em ${backoffMs}ms...`
+          `[PNCP] Tentativa ${attempt}/${retryMaxAttempts} falhou (${response.status}). Retry em ${backoffMs}ms...`
         );
         await sleep(backoffMs);
         continue;
@@ -169,19 +179,19 @@ async function pncpFetch<T>(path: string, params?: Record<string, unknown>): Pro
         error instanceof PncpRequestError
           ? error
           : new PncpRequestError(formatAttemptError(path, params, null, null, error).message, true);
-      if (attempt >= RETRY_MAX_ATTEMPTS) {
+      if (attempt >= retryMaxAttempts) {
         throw err;
       }
       const backoffMs =
-        RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) + Math.floor(Math.random() * 300);
+        retryBaseDelayMs * 2 ** (attempt - 1) + Math.floor(Math.random() * 300);
       console.warn(
-        `[PNCP] Tentativa ${attempt}/${RETRY_MAX_ATTEMPTS} falhou por rede/timeout. Retry em ${backoffMs}ms...`
+        `[PNCP] Tentativa ${attempt}/${retryMaxAttempts} falhou por rede/timeout. Retry em ${backoffMs}ms...`
       );
       await sleep(backoffMs);
     }
   }
 
-  throw new Error(`PNCP: falha inesperada após ${RETRY_MAX_ATTEMPTS} tentativas.`);
+  throw new Error(`PNCP: falha inesperada após ${retryMaxAttempts} tentativas.`);
 }
 
 // ─── Endpoints Públicos ──────────────────────────────────────────────────────
@@ -198,7 +208,7 @@ export async function fetchContratacoesPorPublicacao(
     codigoModalidadeContratacao: params.codigoModalidadeContratacao,
     pagina: params.pagina ?? 1,
     tamanhoPagina: params.tamanhoPagina ?? 50,
-  });
+  }, params.sourceConfig);
 }
 
 /**
@@ -213,7 +223,7 @@ export async function fetchContratacoesPorAtualizacao(
     codigoModalidadeContratacao: params.codigoModalidadeContratacao,
     pagina: params.pagina ?? 1,
     tamanhoPagina: params.tamanhoPagina ?? 50,
-  });
+  }, params.sourceConfig);
 }
 
 /**
@@ -228,7 +238,7 @@ export async function fetchContratacoesComPropostaAberta(
     codigoModalidadeContratacao: params.codigoModalidadeContratacao,
     pagina: params.pagina ?? 1,
     tamanhoPagina: params.tamanhoPagina ?? 50,
-  });
+  }, params.sourceConfig);
 }
 
 export async function fetchContratosPublicados(
@@ -241,7 +251,7 @@ export async function fetchContratosPublicados(
     tamanhoPagina: params.tamanhoPagina ?? 50,
     cnpjOrgao: params.cnpjOrgao,
     codigoUnidadeAdministrativa: params.codigoUnidadeAdministrativa,
-  });
+  }, params.sourceConfig);
 }
 
 export async function fetchContratosPorAtualizacao(
@@ -254,7 +264,7 @@ export async function fetchContratosPorAtualizacao(
     tamanhoPagina: params.tamanhoPagina ?? 50,
     cnpjOrgao: params.cnpjOrgao,
     codigoUnidadeAdministrativa: params.codigoUnidadeAdministrativa,
-  });
+  }, params.sourceConfig);
 }
 
 export async function fetchAtasVigentes(params: PncpDateParams): Promise<PncpResponse> {
@@ -263,7 +273,7 @@ export async function fetchAtasVigentes(params: PncpDateParams): Promise<PncpRes
     dataFinal: params.dataFinal,
     pagina: params.pagina ?? 1,
     tamanhoPagina: params.tamanhoPagina ?? 50,
-  });
+  }, params.sourceConfig);
 }
 
 export async function fetchAtasPorAtualizacao(
@@ -274,7 +284,7 @@ export async function fetchAtasPorAtualizacao(
     dataFinal: params.dataFinal,
     pagina: params.pagina ?? 1,
     tamanhoPagina: params.tamanhoPagina ?? 50,
-  });
+  }, params.sourceConfig);
 }
 
 export async function fetchPcaPorAtualizacao(
@@ -285,7 +295,7 @@ export async function fetchPcaPorAtualizacao(
     dataFinal: params.dataFinal,
     pagina: params.pagina ?? 1,
     tamanhoPagina: params.tamanhoPagina ?? 50,
-  });
+  }, params.sourceConfig);
 }
 
 export async function consultarPncp(
@@ -300,13 +310,13 @@ export async function consultarPncp(
     codigoUnidadeAdministrativa: params.codigoUnidadeAdministrativa,
     pagina: params.pagina ?? 1,
     tamanhoPagina: params.tamanhoPagina ?? 50,
-  });
+  }, params.sourceConfig);
 }
 
 export async function fetchAllPncp<T = unknown>(
   tipoConsulta: PncpConsultaTipo,
   params: Omit<PncpDateParams, "pagina">,
-  maxPages = Number(process.env.PNCP_MAX_PAGES ?? "100")
+  maxPages = sourceConfigNumber(params.sourceConfig, "PNCP_MAX_PAGES", 100)
 ): Promise<T[]> {
   const resultados: T[] = [];
   let pagina = 1;
@@ -340,11 +350,14 @@ export async function fetchAllPncp<T = unknown>(
 export async function fetchItensContratacao(
   cnpjOrgao: string,
   anoCompra: number,
-  sequencialCompra: string
+  sequencialCompra: string,
+  sourceConfig?: SourceConfig
 ): Promise<unknown[]> {
   try {
     const result = await pncpFetch<unknown[] | PncpResponse>(
-      `/v1/orgaos/${cnpjOrgao}/compras/${anoCompra}/${sequencialCompra}/itens`
+      `/v1/orgaos/${cnpjOrgao}/compras/${anoCompra}/${sequencialCompra}/itens`,
+      undefined,
+      sourceConfig
     );
     // API pode retornar array direto ou objeto com .data
     if (Array.isArray(result)) return result;

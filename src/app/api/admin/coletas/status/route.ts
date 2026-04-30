@@ -20,7 +20,7 @@ export async function GET() {
   }
 
   try {
-    const sourcesInfo = getAllSourcesInfo();
+    const sourcesInfo = await getAllSourcesInfo();
     const sourceCodes = sourcesInfo.map((s) => s.code);
 
     // Busca os logs por fonte para que uma fonte com muitos registros recentes

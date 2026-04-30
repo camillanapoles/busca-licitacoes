@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Building2, MapPin, Calendar, DollarSign, ExternalLink, FileText, Hash } from "lucide-react";
@@ -16,6 +16,7 @@ const SOURCE_LABELS: Record<string, string> = {
   TRANSPARENCIA: "Transparência",
   BEC_SP: "BEC-SP",
   TCE_SP: "TCE-SP",
+  TCE_RJ: "TCE-RJ",
 };
 
 const SOURCE_BADGE_COLORS: Record<string, string> = {
@@ -24,7 +25,81 @@ const SOURCE_BADGE_COLORS: Record<string, string> = {
   TRANSPARENCIA: "bg-purple-500/15 text-purple-400 border-purple-500/30",
   BEC_SP: "bg-orange-500/15 text-orange-400 border-orange-500/30",
   TCE_SP: "bg-red-500/15 text-red-400 border-red-500/30",
+  TCE_RJ: "bg-sky-500/15 text-sky-400 border-sky-500/30",
 };
+
+type RawPayloadRecord = Record<string, unknown>;
+
+function asRawPayloadRecord(rawPayload: unknown): RawPayloadRecord | null {
+  return typeof rawPayload === "object" && rawPayload !== null && !Array.isArray(rawPayload)
+    ? rawPayload
+    : null;
+}
+
+function pickRaw(rawPayload: RawPayloadRecord | null, keys: string[]): unknown {
+  if (!rawPayload) return null;
+
+  for (const key of keys) {
+    const value = rawPayload[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+
+  return null;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  const normalized = trimmed.includes(",")
+    ? trimmed.replace(/\./g, "").replace(",", ".")
+    : trimmed;
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function asDate(value: unknown): Date | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const trimmed = value.trim();
+  const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const parsed = dateOnlyMatch
+    ? new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]))
+    : new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getDisplayDate(
+  dataFimProposta: Date | null,
+  rawPayload: RawPayloadRecord | null
+): { label: string; value: Date | null; showTime: boolean } {
+  if (dataFimProposta) {
+    return { label: "Prazo de Proposta", value: dataFimProposta, showTime: true };
+  }
+
+  const approvalDate = asDate(pickRaw(rawPayload, ["DataAprovacao", "data_aprovacao"]));
+  if (approvalDate) {
+    return { label: "Data de Aprovação", value: approvalDate, showTime: false };
+  }
+
+  return { label: "Prazo de Proposta", value: null, showTime: false };
+}
+
+function formatDate(date: Date, showTime: boolean) {
+  const formattedDate = date.toLocaleDateString("pt-BR");
+
+  if (!showTime) {
+    return formattedDate;
+  }
+
+  return `${formattedDate} às ${date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
 
 export default async function LicitacaoPage({
   params,
@@ -43,6 +118,24 @@ export default async function LicitacaoPage({
   if (!licitacao) {
     notFound();
   }
+
+  const rawPayload = asRawPayloadRecord(licitacao.rawPayload);
+  const valorEstimado =
+    licitacao.valorEstimado ??
+    asNumber(
+      pickRaw(rawPayload, [
+        "ValorProcesso",
+        "ValorEstimado",
+        "ValorTotal",
+        "ValorContrato",
+        "valor_processo",
+        "valor_estimado",
+        "valor_total",
+        "valor_contrato",
+        "valor",
+      ])
+    );
+  const displayDate = getDisplayDate(licitacao.dataFimProposta, rawPayload);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -94,8 +187,8 @@ export default async function LicitacaoPage({
             <div>
               <p className="text-sm text-muted-foreground font-medium mb-1">Valor Estimado</p>
               <p className="text-2xl font-bold">
-                {licitacao.valorEstimado 
-                  ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(licitacao.valorEstimado) 
+                {valorEstimado !== null 
+                  ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorEstimado) 
                   : "Não informado"}
               </p>
             </div>
@@ -108,10 +201,10 @@ export default async function LicitacaoPage({
               <Calendar className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground font-medium mb-1">Prazo de Proposta</p>
+              <p className="text-sm text-muted-foreground font-medium mb-1">{displayDate.label}</p>
               <p className="text-lg font-bold">
-                {licitacao.dataFimProposta 
-                  ? new Date(licitacao.dataFimProposta).toLocaleDateString('pt-BR') + ' às ' + new Date(licitacao.dataFimProposta).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})
+                {displayDate.value 
+                  ? formatDate(displayDate.value, displayDate.showTime)
                   : "Data não informada"}
               </p>
             </div>

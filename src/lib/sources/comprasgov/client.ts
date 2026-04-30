@@ -25,29 +25,35 @@
  *   11 - OCDS                           -> /modulo-ocds/*
  */
 
+import type { SourceConfig } from "@/lib/sources/types";
+import { sourceConfigValue } from "@/lib/sources/config";
+
 const DEFAULT_BASE = "https://dadosabertos.compras.gov.br";
 
-const BASE_URL = (process.env.COMPRAS_GOV_BASE_URL || DEFAULT_BASE)
-  .replace(/\/$/, "")
-  .replace("://compras.dados.gov.br", "://dadosabertos.compras.gov.br");
-
-export const COMPRAS_GOV_SWAGGER_URL =
-  process.env.COMPRAS_GOV_SWAGGER_URL || `${BASE_URL}/swagger-ui/index.html`;
-
-export const COMPRAS_GOV_OPENAPI_URL =
-  process.env.COMPRAS_GOV_OPENAPI_URL || `${BASE_URL}/v3/api-docs`;
-
-export function isComprasGovConfigured(): boolean {
-  return !!BASE_URL;
+function resolveBaseUrl(config?: SourceConfig): string {
+  return sourceConfigValue(config, "COMPRAS_GOV_BASE_URL", DEFAULT_BASE)
+    .replace(/\/$/, "")
+    .replace("://compras.dados.gov.br", "://dadosabertos.compras.gov.br");
 }
 
-function requireConfig(): string {
-  if (!BASE_URL) {
+export const COMPRAS_GOV_SWAGGER_URL =
+  `${DEFAULT_BASE}/swagger-ui/index.html`;
+
+export const COMPRAS_GOV_OPENAPI_URL =
+  `${DEFAULT_BASE}/v3/api-docs`;
+
+export function isComprasGovConfigured(config?: SourceConfig): boolean {
+  return !!resolveBaseUrl(config);
+}
+
+function requireConfig(config?: SourceConfig): string {
+  const baseUrl = resolveBaseUrl(config);
+  if (!baseUrl) {
     throw new Error(
-      "Fonte COMPRAS_GOV não configurada. Defina a variável de ambiente COMPRAS_GOV_BASE_URL."
+      "Fonte COMPRAS_GOV não configurada. Informe COMPRAS_GOV_BASE_URL no cadastro da fonte."
     );
   }
-  return BASE_URL;
+  return baseUrl;
 }
 
 // ─── Helper Genérico ─────────────────────────────────────────────────────────
@@ -59,6 +65,7 @@ export interface ComprasGovFetchOptions {
   accept?: string;
   /** Timeout em milissegundos. Padrão: 30s. */
   timeoutMs?: number;
+  sourceConfig?: SourceConfig;
 }
 
 /** Mensagens conhecidas que indicam sobrecarga temporária da API. */
@@ -93,14 +100,16 @@ export async function consultarComprasGov<T = unknown>({
   accept = "application/json",
   timeoutMs = 30_000,
   maxRetries = 3,
+  sourceConfig,
 }: {
   endpoint: string;
   params?: ComprasGovParams;
   accept?: string;
   timeoutMs?: number;
   maxRetries?: number;
+  sourceConfig?: SourceConfig;
 }): Promise<T> {
-  const baseUrl = requireConfig();
+  const baseUrl = requireConfig(sourceConfig);
   const url = new URL(`${baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`);
 
   for (const [key, value] of Object.entries(params)) {
@@ -231,6 +240,7 @@ export interface PaginadoOptions<T = unknown> {
   extrairLista?: (data: unknown) => T[];
   /** Header Accept. Padrão JSON. */
   accept?: string;
+  sourceConfig?: SourceConfig;
 }
 
 /**
@@ -243,6 +253,7 @@ export async function consultarComprasGovPaginado<T = unknown>({
   limitePaginas = 20,
   extrairLista,
   accept = "application/json",
+  sourceConfig,
 }: PaginadoOptions<T>): Promise<T[]> {
   const todos: T[] = [];
 
@@ -251,6 +262,7 @@ export async function consultarComprasGovPaginado<T = unknown>({
       endpoint,
       params: { ...params, pagina },
       accept,
+      sourceConfig,
     });
 
     const lista = extrairLista ? extrairLista(data) : extractItems<T>(data);
@@ -425,13 +437,16 @@ export interface ConsultarLicitacaoLegadoParams {
   data_publicacao_final: string;
   /** Filtra registros sob a Lei 14.133/2021. */
   pertence14133?: boolean;
+  sourceConfig?: SourceConfig;
 }
 
 export function consultarLicitacaoLegado(params: ConsultarLicitacaoLegadoParams) {
+  const { sourceConfig, ...queryParams } = params;
   const tamanho = Math.max(10, Math.min(500, params.tamanhoPagina ?? 50));
   return consultarComprasGov({
     endpoint: "/modulo-legado/1_consultarLicitacao",
-    params: { pagina: 1, ...params, tamanhoPagina: tamanho },
+    params: { pagina: 1, ...queryParams, tamanhoPagina: tamanho },
+    sourceConfig,
   });
 }
 
@@ -467,13 +482,16 @@ export interface ConsultarContratacao14133Params {
   dataAualizacaoPncp?: string;
   amparoLegalCodigoPncp?: number;
   contratacaoExcluida?: boolean;
+  sourceConfig?: SourceConfig;
 }
 
 export function consultarContratacoes14133(params: ConsultarContratacao14133Params) {
+  const { sourceConfig, ...queryParams } = params;
   const tamanho = Math.max(10, Math.min(500, params.tamanhoPagina ?? 50));
   return consultarComprasGov({
     endpoint: "/modulo-contratacoes/1_consultarContratacoes_PNCP_14133",
-    params: { pagina: 1, ...params, tamanhoPagina: tamanho },
+    params: { pagina: 1, ...queryParams, tamanhoPagina: tamanho },
+    sourceConfig,
   });
 }
 

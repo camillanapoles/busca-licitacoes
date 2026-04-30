@@ -1,22 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Search } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { UserCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function Navbar() {
   const { data: session } = useSession();
+  const pathname = usePathname();
+  const [hasSidebar, setHasSidebar] = useState(false);
+
+  useEffect(() => {
+    setHasSidebar(pathname.startsWith("/app") || pathname.startsWith("/admin"));
+  }, [pathname]);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center space-x-2">
-          <Search className="h-6 w-6 text-primary" />
-          <span className="font-bold text-xl tracking-tight">LicitaBusca</span>
-        </Link>
+    <header
+      className={cn(
+        "sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
+        hasSidebar && "md:ml-64 md:w-[calc(100%-16rem)]"
+      )}
+    >
+      <div className="container mx-auto px-4 h-16 flex items-center justify-end">
         <nav className="flex items-center space-x-4">
           <Link href="/busca" className="text-sm font-medium text-muted-foreground hover:text-foreground">
             Buscar

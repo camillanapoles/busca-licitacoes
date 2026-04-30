@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Database, FileText, LayoutDashboard, Users } from "lucide-react";
+import { Database, FileText, LayoutDashboard, Search, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -37,11 +37,14 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-full md:w-64 bg-slate-900 text-slate-300 flex-shrink-0">
-      <div className="p-6">
-        <h2 className="text-xl font-bold text-white tracking-tight">Admin Panel</h2>
+    <aside className="w-full md:w-64 md:min-h-screen bg-slate-900 text-slate-300 flex-shrink-0">
+      <div className="border-b border-slate-800 px-6 py-3">
+        <Link href="/" className="flex h-10 items-center gap-2 text-white">
+          <Search className="h-6 w-6 text-white" />
+          <span className="font-bold text-xl tracking-tight">LicitaBusca</span>
+        </Link>
       </div>
-      <nav className="px-4 space-y-1">
+      <nav className="px-4 pt-4 space-y-1">
         {links.map((link) => {
           const Icon = link.icon;
           const isActive = isActivePath(pathname, link.href);

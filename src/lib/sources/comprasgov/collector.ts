@@ -57,8 +57,8 @@ const MODALIDADES_PNCP = [
 /** Número máximo de páginas por modalidade. */
 const MAX_PAGES_POR_MODALIDADE = 3;
 
-function isConfigured(): boolean {
-  return isComprasGovConfigured();
+function isConfigured(config = {}): boolean {
+  return isComprasGovConfigured(config);
 }
 
 function log(...args: unknown[]) {
@@ -78,7 +78,7 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
 
   if (!isConfigured()) {
     result.errors.push(
-      "Fonte COMPRAS_GOV ainda precisa de configuração. Defina COMPRAS_GOV_BASE_URL no .env."
+      "Fonte COMPRAS_GOV ainda precisa de configuração. Informe COMPRAS_GOV_BASE_URL no cadastro da fonte."
     );
     return result;
   }
@@ -113,6 +113,7 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
           codigoModalidade: modalidade.codigo,
           dataPublicacaoPncpInicial: dataInicial,
           dataPublicacaoPncpFinal: dataFinal,
+          sourceConfig: params.sourceConfig,
         });
         const items = extractItems<ComprasGovContratacao14133Raw>(payload);
 
@@ -167,6 +168,7 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
         tamanhoPagina,
         data_publicacao_inicial: dataInicial,
         data_publicacao_final: dataFinal,
+        sourceConfig: params.sourceConfig,
       });
       const items = extractItems<ComprasGovCompraRaw>(payload);
       log(`[legado] ${items.length} registros retornados`);

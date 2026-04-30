@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getSourceCollector } from "@/lib/sources/registry";
+import { getSourceEntry } from "@/lib/sources/registry";
 import type { SourceCode, CollectionParams, CollectionResult } from "@/lib/sources/types";
 
 export type CollectSourceOptions = CollectionParams & {
@@ -55,8 +55,16 @@ export async function collectSource(
   };
 
   try {
-    const collector = getSourceCollector(code);
-    result = await collector.collect({ ...params, logId: log.id });
+    const sourceEntry = await getSourceEntry(code);
+    if (!sourceEntry) {
+      throw new Error(`Fonte "${code}" não está cadastrada ou está desativada.`);
+    }
+
+    result = await sourceEntry.collector.collect({
+      ...params,
+      logId: log.id,
+      sourceConfig: sourceEntry.config,
+    });
 
     const hasErrors = result.errors.length > 0;
     const status = result.totalColetado === 0 && hasErrors ? "ERROR" : "SUCCESS";

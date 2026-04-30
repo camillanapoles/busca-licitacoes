@@ -12,6 +12,7 @@ import {
   fetchContratacoesComPropostaAberta,
   fetchItensContratacao,
 } from "./client";
+import { isSourceConfigComplete, sourceConfigValue } from "@/lib/sources/config";
 import {
   normalizePncpContratacao,
   normalizePncpItem,
@@ -22,9 +23,9 @@ import { prisma } from "@/lib/prisma";
 
 // ─── Verificação de Configuração ─────────────────────────────────────────────
 
-function isPncpConfigured(): boolean {
+function isPncpConfigured(config = {}): boolean {
   // PNCP tem URL padrão, então sempre está "configurado"
-  return true;
+  return isSourceConfigComplete("PNCP", config);
 }
 
 type PncpCheckpoint = {
@@ -122,8 +123,8 @@ async function loadResumeCheckpoint(
 
 // ─── Coletor ─────────────────────────────────────────────────────────────────
 
-function getModalidadesParametro(): Array<number | undefined> {
-  const configured = process.env.PNCP_CODIGOS_MODALIDADE;
+function getModalidadesParametro(params: CollectionParams): Array<number | undefined> {
+  const configured = sourceConfigValue(params.sourceConfig, "PNCP_CODIGOS_MODALIDADE");
   if (!configured) return [undefined];
 
   const modalidades = configured
@@ -151,7 +152,7 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
   const dataFinal = format(end, "yyyyMMdd");
   const initialPage = params.page ?? 1;
   const tamanhoPagina = params.limit ?? 50;
-  const modalidadesParametro = getModalidadesParametro();
+  const modalidadesParametro = getModalidadesParametro(params);
   const modalidadesCheckpoint = modalidadesParametro.map((value) => value ?? null);
   const seenKeys = new Set<string>();
   const logId = params.logId;
@@ -197,6 +198,7 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
           codigoModalidadeContratacao,
           pagina: page,
           tamanhoPagina,
+          sourceConfig: params.sourceConfig,
         });
         contratosResposta = (response.data as PncpContratacaoRaw[]) ?? [];
         totalPaginas = response.totalPaginas;
@@ -250,7 +252,12 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
 
             if (cnpj && ano && seq) {
               try {
-                const itensRaw = await fetchItensContratacao(cnpj, ano, seq);
+                const itensRaw = await fetchItensContratacao(
+                  cnpj,
+                  ano,
+                  seq,
+                  params.sourceConfig
+                );
                 if (itensRaw.length > 0) {
                   const itensData: Prisma.LicitacaoItemCreateManyInput[] = itensRaw.map((item) => {
                     const normalized = normalizePncpItem(

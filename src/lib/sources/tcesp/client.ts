@@ -10,9 +10,11 @@
  * Para busca pública de licitações de SP, use PNCP e BEC-SP.
  */
 
-const PROD_BASE_URL = normalizeAudespBaseUrl(process.env.TCE_SP_BASE_URL) ?? "https://audesp.tce.sp.gov.br";
-const PILOTO_BASE_URL =
-  normalizeAudespBaseUrl(process.env.TCE_SP_PILOTO_BASE_URL) ?? "https://audesp-piloto.tce.sp.gov.br";
+import type { SourceConfig } from "@/lib/sources/types";
+import { sourceConfigValue } from "@/lib/sources/config";
+
+const PROD_BASE_URL = "https://audesp.tce.sp.gov.br";
+const PILOTO_BASE_URL = "https://audesp-piloto.tce.sp.gov.br";
 
 export type TcespAmbiente = "piloto" | "producao";
 
@@ -40,21 +42,30 @@ type EnviarDocumentoOptions = {
   documentoJSON: DocumentoJSON;
   token?: string;
   ambiente?: TcespAmbiente;
+  sourceConfig?: SourceConfig;
 };
 
 function normalizeAudespBaseUrl(url?: string): string | undefined {
   return url?.replace(/\/$/, "").replace(/\/api$/, "");
 }
 
-export function isTcespConfigured(): boolean {
+export function isTcespConfigured(config?: SourceConfig): boolean {
   return !!(
-    process.env.TCE_SP_ACCESS_TOKEN ||
-    (process.env.TCE_SP_EMAIL && process.env.TCE_SP_PASSWORD)
+    sourceConfigValue(config, "TCE_SP_ACCESS_TOKEN") ||
+    (sourceConfigValue(config, "TCE_SP_EMAIL") &&
+      sourceConfigValue(config, "TCE_SP_PASSWORD"))
   );
 }
 
-function resolveBaseUrl(ambiente: TcespAmbiente = "producao"): string {
-  return ambiente === "piloto" ? PILOTO_BASE_URL : PROD_BASE_URL;
+function resolveBaseUrl(ambiente: TcespAmbiente = "producao", config?: SourceConfig): string {
+  if (ambiente === "piloto") {
+    return (
+      normalizeAudespBaseUrl(sourceConfigValue(config, "TCE_SP_PILOTO_BASE_URL")) ??
+      PILOTO_BASE_URL
+    );
+  }
+
+  return normalizeAudespBaseUrl(sourceConfigValue(config, "TCE_SP_BASE_URL")) ?? PROD_BASE_URL;
 }
 
 async function parseAudespResponse<T>(
@@ -92,27 +103,32 @@ async function parseAudespResponse<T>(
 }
 
 export async function loginAudesp({
-  email = process.env.TCE_SP_EMAIL,
-  password = process.env.TCE_SP_PASSWORD,
+  email,
+  password,
   ambiente = "producao",
+  sourceConfig,
 }: {
   email?: string;
   password?: string;
   ambiente?: TcespAmbiente;
+  sourceConfig?: SourceConfig;
 } = {}): Promise<AudespResponse<AudespLoginResponse>> {
-  if (!email || !password) {
+  const resolvedEmail = email ?? sourceConfigValue(sourceConfig, "TCE_SP_EMAIL");
+  const resolvedPassword = password ?? sourceConfigValue(sourceConfig, "TCE_SP_PASSWORD");
+
+  if (!resolvedEmail || !resolvedPassword) {
     return {
       ok: false,
-      error: "Credenciais TCE_SP_EMAIL e TCE_SP_PASSWORD não configuradas.",
+      error: "Credenciais TCE_SP_EMAIL e TCE_SP_PASSWORD não configuradas no cadastro da fonte.",
     };
   }
 
   const endpoint = "/login";
-  const response = await fetch(`${resolveBaseUrl(ambiente)}${endpoint}`, {
+  const response = await fetch(`${resolveBaseUrl(ambiente, sourceConfig)}${endpoint}`, {
     method: "POST",
     headers: {
       Accept: "application/json",
-      "x-authorization": `${email}:${password}`,
+      "x-authorization": `${resolvedEmail}:${resolvedPassword}`,
     },
     cache: "no-store",
   });
@@ -122,27 +138,31 @@ export async function loginAudesp({
 
 export async function consultarProtocoloFaseIV({
   protocolo,
-  token = process.env.TCE_SP_ACCESS_TOKEN,
+  token,
   ambiente = "producao",
+  sourceConfig,
 }: {
   protocolo: string;
   token?: string;
   ambiente?: TcespAmbiente;
+  sourceConfig?: SourceConfig;
 }): Promise<AudespResponse<unknown>> {
   if (!protocolo) {
     return { ok: false, error: "Protocolo obrigatório." };
   }
 
-  if (!token) {
+  const resolvedToken = token ?? sourceConfigValue(sourceConfig, "TCE_SP_ACCESS_TOKEN");
+
+  if (!resolvedToken) {
     return { ok: false, error: "Token AUDESP obrigatório." };
   }
 
   const endpoint = `/f4/consulta/${encodeURIComponent(protocolo)}`;
-  const response = await fetch(`${resolveBaseUrl(ambiente)}${endpoint}`, {
+  const response = await fetch(`${resolveBaseUrl(ambiente, sourceConfig)}${endpoint}`, {
     method: "GET",
     headers: {
       Accept: "application/json",
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${resolvedToken}`,
     },
     cache: "no-store",
   });
@@ -152,48 +172,55 @@ export async function consultarProtocoloFaseIV({
 
 export async function enviarLicitacaoAudesp({
   documentoJSON,
-  token = process.env.TCE_SP_ACCESS_TOKEN,
+  token,
   ambiente = "producao",
+  sourceConfig,
 }: EnviarDocumentoOptions): Promise<AudespResponse<unknown>> {
   return enviarDocumentoFaseIV({
     endpoint: "/recepcao-fase-4/f4/enviar-licitacao",
     documentoJSON,
     token,
     ambiente,
+    sourceConfig,
   });
 }
 
 export async function enviarAtaAudesp({
   documentoJSON,
-  token = process.env.TCE_SP_ACCESS_TOKEN,
+  token,
   ambiente = "producao",
+  sourceConfig,
 }: EnviarDocumentoOptions): Promise<AudespResponse<unknown>> {
   return enviarDocumentoFaseIV({
     endpoint: "/recepcao-fase-4/f4/enviar-ata",
     documentoJSON,
     token,
     ambiente,
+    sourceConfig,
   });
 }
 
 export async function enviarAjusteAudesp({
   documentoJSON,
-  token = process.env.TCE_SP_ACCESS_TOKEN,
+  token,
   ambiente = "producao",
+  sourceConfig,
 }: EnviarDocumentoOptions): Promise<AudespResponse<unknown>> {
   return enviarDocumentoFaseIV({
     endpoint: "/recepcao-fase-4/f4/enviar-ajuste",
     documentoJSON,
     token,
     ambiente,
+    sourceConfig,
   });
 }
 
 export async function enviarEditalAudesp({
   documentoJSON,
   arquivoPDF,
-  token = process.env.TCE_SP_ACCESS_TOKEN,
+  token,
   ambiente = "producao",
+  sourceConfig,
 }: EnviarDocumentoOptions & {
   arquivoPDF: Blob;
 }): Promise<AudespResponse<unknown>> {
@@ -209,7 +236,9 @@ export async function enviarEditalAudesp({
     return { ok: false, error: "arquivoPDF não pode exceder 30 MB." };
   }
 
-  if (!token) {
+  const resolvedToken = token ?? sourceConfigValue(sourceConfig, "TCE_SP_ACCESS_TOKEN");
+
+  if (!resolvedToken) {
     return { ok: false, error: "Token AUDESP obrigatório." };
   }
 
@@ -221,10 +250,10 @@ export async function enviarEditalAudesp({
   );
   form.append("arquivoPDF", arquivoPDF, "edital.pdf");
 
-  const response = await fetch(`${resolveBaseUrl(ambiente)}${endpoint}`, {
+  const response = await fetch(`${resolveBaseUrl(ambiente, sourceConfig)}${endpoint}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${resolvedToken}`,
     },
     body: form,
     cache: "no-store",
@@ -238,6 +267,7 @@ async function enviarDocumentoFaseIV({
   documentoJSON,
   token,
   ambiente,
+  sourceConfig,
 }: EnviarDocumentoOptions & {
   endpoint:
     | "/recepcao-fase-4/f4/enviar-licitacao"
@@ -248,7 +278,9 @@ async function enviarDocumentoFaseIV({
     return { ok: false, error: "documentoJSON obrigatório." };
   }
 
-  if (!token) {
+  const resolvedToken = token ?? sourceConfigValue(sourceConfig, "TCE_SP_ACCESS_TOKEN");
+
+  if (!resolvedToken) {
     return { ok: false, error: "Token AUDESP obrigatório." };
   }
 
@@ -258,10 +290,10 @@ async function enviarDocumentoFaseIV({
     typeof documentoJSON === "string" ? documentoJSON : JSON.stringify(documentoJSON)
   );
 
-  const response = await fetch(`${resolveBaseUrl(ambiente)}${endpoint}`, {
+  const response = await fetch(`${resolveBaseUrl(ambiente, sourceConfig)}${endpoint}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${resolvedToken}`,
     },
     body: form,
     cache: "no-store",

@@ -28,13 +28,26 @@ export default async function LicitacoesAdminPage({
 
   const resolvedParams = await searchParams;
   const requestedFonte = typeof resolvedParams.fonte === "string" ? resolvedParams.fonte : undefined;
+  const requestedQuery = typeof resolvedParams.q === "string" ? resolvedParams.q.trim() : "";
   const requestedPage = typeof resolvedParams.page === "string" ? Number.parseInt(resolvedParams.page, 10) : 1;
-  const sourceOptions = getAllSourcesInfo().map(({ code, name }) => ({ code, name }));
+  const sourceOptions = (await getAllSourcesInfo()).map(({ code, name }) => ({ code, name }));
   const selectedFonte = sourceOptions.some((source) => source.code === requestedFonte)
     ? requestedFonte
     : undefined;
   const currentPage = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const where: Prisma.LicitacaoWhereInput = selectedFonte ? { fonte: selectedFonte } : {};
+  const where: Prisma.LicitacaoWhereInput = {
+    AND: [
+      selectedFonte ? { fonte: selectedFonte } : {},
+      requestedQuery
+        ? {
+            OR: [
+              { objeto: { contains: requestedQuery } },
+              { orgao: { contains: requestedQuery } },
+            ],
+          }
+        : {},
+    ],
+  };
 
   const [total, filteredTotal] = await Promise.all([
     prisma.licitacao.count(),
@@ -57,6 +70,10 @@ export default async function LicitacoesAdminPage({
 
     if (selectedFonte) {
       params.set("fonte", selectedFonte);
+    }
+
+    if (requestedQuery) {
+      params.set("q", requestedQuery);
     }
 
     if (targetPage > 1) {
@@ -82,10 +99,17 @@ export default async function LicitacoesAdminPage({
       </div>
 
       <div className="flex gap-2">
-        <div className="relative flex-1">
+        <form method="GET" action="/admin/licitacoes" className="relative flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por objeto ou órgão..." className="pl-9" />
-        </div>
+          {selectedFonte && <input type="hidden" name="fonte" value={selectedFonte} />}
+          <Input
+            key={requestedQuery}
+            name="q"
+            defaultValue={requestedQuery}
+            placeholder="Buscar por objeto ou órgão..."
+            className="pl-9"
+          />
+        </form>
         <SourceFilter currentFonte={selectedFonte} sources={sourceOptions} />
       </div>
 
@@ -94,7 +118,8 @@ export default async function LicitacoesAdminPage({
           <CardTitle>Licitações Recentes</CardTitle>
           <CardDescription>
             Exibindo {firstItem}-{lastItem} de {filteredTotal.toLocaleString("pt-BR")} licitações
-            {selectedSourceName ? ` de ${selectedSourceName}` : ""}. {total.toLocaleString("pt-BR")} registro(s)
+            {selectedSourceName ? ` de ${selectedSourceName}` : ""}
+            {requestedQuery ? ` para "${requestedQuery}"` : ""}. {total.toLocaleString("pt-BR")} registro(s)
             {selectedSourceName ? " nesta origem" : " no total"}.
           </CardDescription>
         </CardHeader>
@@ -135,6 +160,8 @@ export default async function LicitacoesAdminPage({
                       <Button
                         variant="ghost"
                         size="icon"
+                        nativeButton={false}
+                        aria-label="Abrir licitação em nova aba"
                         render={
                           <a href={`/licitacoes/${item.id}`} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="h-4 w-4" />

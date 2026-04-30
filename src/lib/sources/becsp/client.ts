@@ -8,6 +8,9 @@
  * client preserva a resposta bruta e registra metadados da consulta.
  */
 
+import type { SourceConfig } from "@/lib/sources/types";
+import { sourceConfigValue } from "@/lib/sources/config";
+
 export const BEC_SP_DEFAULT_BASE_URL = "https://www.bec.sp.gov.br";
 export const BEC_SP_DEFAULT_API_BASE_URL = `${BEC_SP_DEFAULT_BASE_URL}/BEC_API/API`;
 export const BEC_SP_PORTAL_URL = "https://www.bec.sp.gov.br/BECSP/Home/Home.aspx";
@@ -16,20 +19,22 @@ export const BEC_SP_WEBSERVICE_INFO_URL =
 export const BEC_SP_MANUAL_TECNICO_URL =
   "https://portal.fazenda.sp.gov.br/acessoinformacao/Downloads/Webservice-BEC/Manual%20Webservice_Compras%20Eletronicas%20MAIO%202018.doc";
 
-function resolveApiBaseUrl(): string {
-  if (process.env.BEC_SP_API_BASE_URL) {
-    return process.env.BEC_SP_API_BASE_URL.replace(/\/$/, "");
+function resolveApiBaseUrlFromConfig(config?: SourceConfig): string {
+  const apiBaseUrl = sourceConfigValue(config, "BEC_SP_API_BASE_URL");
+  if (apiBaseUrl) {
+    return apiBaseUrl.replace(/\/$/, "");
   }
 
-  const baseUrl = (process.env.BEC_SP_BASE_URL ?? BEC_SP_DEFAULT_BASE_URL).replace(/\/$/, "");
+  const baseUrl = sourceConfigValue(config, "BEC_SP_BASE_URL", BEC_SP_DEFAULT_BASE_URL).replace(
+    /\/$/,
+    ""
+  );
   if (baseUrl.toLowerCase().endsWith("/bec_api/api")) {
     return baseUrl;
   }
 
   return `${baseUrl}/BEC_API/API`;
 }
-
-const API_BASE_URL = resolveApiBaseUrl();
 
 export type BecSpConsultaTipo =
   | "pregao_materiais_abertos"
@@ -147,22 +152,23 @@ export interface BecSpParams {
   dataFim?: string;
   codigo?: string;
   oc?: string;
+  sourceConfig?: SourceConfig;
 }
 
-export function isBecSpConfigured(): boolean {
-  return true;
+export function isBecSpConfigured(config?: SourceConfig): boolean {
+  return !!resolveApiBaseUrlFromConfig(config);
 }
 
 function cleanPathSegment(segment: string): string {
   return segment.replace(/^\/|\/$/g, "");
 }
 
-function buildUrl(endpoint: string, paramsPath: string[] = []): string {
+function buildUrl(endpoint: string, paramsPath: string[] = [], sourceConfig?: SourceConfig): string {
   const path = [cleanPathSegment(endpoint), ...paramsPath.map(cleanPathSegment)]
     .filter(Boolean)
     .join("/");
 
-  return `${API_BASE_URL}/${path}`;
+  return `${resolveApiBaseUrlFromConfig(sourceConfig)}/${path}`;
 }
 
 function parseLegacyBody(body: string): { data?: unknown; raw?: string } {
@@ -193,15 +199,17 @@ export async function consultarBecSp({
   endpoint,
   paramsPath = [],
   accept = "application/json",
+  sourceConfig,
 }: {
   tipo: BecSpConsultaTipo;
   endpoint?: string;
   paramsPath?: string[];
   accept?: string;
+  sourceConfig?: SourceConfig;
 }): Promise<BecSpApiResult> {
   const config = BEC_SP_ENDPOINTS[tipo];
   const resolvedEndpoint = endpoint ?? config.endpoint;
-  const url = buildUrl(resolvedEndpoint, paramsPath);
+  const url = buildUrl(resolvedEndpoint, paramsPath, sourceConfig);
   const requestedAt = new Date().toISOString();
 
   const response = await fetch(url, {
@@ -249,6 +257,7 @@ export async function consultarBecSpPorTipo(
     tipo,
     endpoint: config.endpoint,
     paramsPath: paramsPathForConfig(config, params),
+    sourceConfig: params.sourceConfig,
   });
 }
 

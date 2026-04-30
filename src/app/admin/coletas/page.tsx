@@ -20,6 +20,10 @@ import {
   Loader2,
   Database,
   Zap,
+  Power,
+  PowerOff,
+  Trash2,
+  ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -43,6 +47,8 @@ type SourceStatus = {
   description: string;
   isConfigured: boolean;
   envVarsRequired: string[];
+  ativo: boolean;
+  configKeys: string[];
   lastRun: LastRun | null;
   recentErrors: { id: string; startedAt: string; erro: string | null }[];
 };
@@ -94,6 +100,7 @@ export default function ColetasPage() {
   const [sources, setSources] = useState<SourceStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [collecting, setCollecting] = useState<CollectingState>({});
+  const [updating, setUpdating] = useState<CollectingState>({});
   const [collectingAll, setCollectingAll] = useState(false);
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [globalMessage, setGlobalMessage] = useState("");
@@ -163,6 +170,60 @@ export default function ColetasPage() {
     }
   };
 
+  const handleToggleSource = async (source: SourceStatus) => {
+    setUpdating((prev) => ({ ...prev, [source.code]: true }));
+    try {
+      const res = await fetch(`/api/admin/coletas/${source.code}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ativo: !source.ativo }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessages((prev) => ({
+          ...prev,
+          [source.code]: `Erro: ${data.error ?? "não foi possível alterar a fonte"}`,
+        }));
+        return;
+      }
+      setMessages((prev) => ({
+        ...prev,
+        [source.code]: source.ativo ? "Fonte desativada." : "Fonte ativada.",
+      }));
+      await fetchStatus();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro desconhecido";
+      setMessages((prev) => ({ ...prev, [source.code]: `Erro: ${msg}` }));
+    } finally {
+      setUpdating((prev) => ({ ...prev, [source.code]: false }));
+    }
+  };
+
+  const handleDeleteSource = async (source: SourceStatus) => {
+    if (!confirm(`Deletar a fonte ${source.name}? Ela sairá das coletas até ser importada novamente.`)) {
+      return;
+    }
+
+    setUpdating((prev) => ({ ...prev, [source.code]: true }));
+    try {
+      const res = await fetch(`/api/admin/coletas/${source.code}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setMessages((prev) => ({
+          ...prev,
+          [source.code]: `Erro: ${data.error ?? "não foi possível deletar a fonte"}`,
+        }));
+        return;
+      }
+      await fetchStatus();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro desconhecido";
+      setMessages((prev) => ({ ...prev, [source.code]: `Erro: ${msg}` }));
+    } finally {
+      setUpdating((prev) => ({ ...prev, [source.code]: false }));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -225,17 +286,17 @@ export default function ColetasPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-emerald-500">
-              {sources.filter((s) => s.isConfigured).length}
+              {sources.filter((s) => s.ativo && s.isConfigured).length}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Configuradas</p>
+            <p className="text-xs text-muted-foreground mt-1">Ativas/configuradas</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-amber-500">
-              {sources.filter((s) => !s.isConfigured).length}
+              {sources.filter((s) => !s.ativo).length}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Pendentes</p>
+            <p className="text-xs text-muted-foreground mt-1">Desativadas</p>
           </CardContent>
         </Card>
         <Card>
@@ -254,7 +315,7 @@ export default function ColetasPage() {
           <Card
             key={source.code}
             className={
-              source.isConfigured
+              source.ativo && source.isConfigured
                 ? "border-border"
                 : "border-border opacity-80"
             }
@@ -264,14 +325,14 @@ export default function ColetasPage() {
                 <div className="flex items-start gap-3">
                   <div
                     className={`p-2 rounded-lg mt-0.5 ${
-                      source.isConfigured
+                      source.ativo && source.isConfigured
                         ? "bg-emerald-500/10"
                         : "bg-amber-500/10"
                     }`}
                   >
                     <Database
                       className={`h-4 w-4 ${
-                        source.isConfigured
+                        source.ativo && source.isConfigured
                           ? "text-emerald-500"
                           : "text-amber-500"
                       }`}
@@ -280,6 +341,15 @@ export default function ColetasPage() {
                   <div>
                     <CardTitle className="text-base flex items-center gap-2 flex-wrap">
                       {source.name}
+                      <Badge
+                        className={
+                          source.ativo
+                            ? "bg-blue-500/15 text-blue-400 border-blue-500/30 text-xs"
+                            : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30 text-xs"
+                        }
+                      >
+                        {source.ativo ? "Ativa" : "Desativada"}
+                      </Badge>
                       <Badge
                         className={
                           source.isConfigured
@@ -296,21 +366,47 @@ export default function ColetasPage() {
                   </div>
                 </div>
 
-                <Button
-                  size="sm"
-                  variant={source.isConfigured ? "default" : "outline"}
-                  onClick={() => handleCollectSource(source.code)}
-                  disabled={!!collecting[source.code]}
-                  className="gap-2 shrink-0"
-                  id={`btn-coletar-${source.code.toLowerCase()}`}
-                >
-                  {collecting[source.code] ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Play className="h-3.5 w-3.5" />
-                  )}
-                  {collecting[source.code] ? "Coletando..." : "Coletar agora"}
-                </Button>
+                <div className="flex flex-wrap justify-end gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant={source.isConfigured && source.ativo ? "default" : "outline"}
+                    onClick={() => handleCollectSource(source.code)}
+                    disabled={!!collecting[source.code] || !source.ativo}
+                    className="gap-2"
+                    id={`btn-coletar-${source.code.toLowerCase()}`}
+                  >
+                    {collecting[source.code] ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
+                    {collecting[source.code] ? "Coletando..." : "Coletar agora"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleToggleSource(source)}
+                    disabled={!!updating[source.code]}
+                    className="gap-2"
+                  >
+                    {source.ativo ? (
+                      <PowerOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Power className="h-3.5 w-3.5" />
+                    )}
+                    {source.ativo ? "Desativar" : "Ativar"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDeleteSource(source)}
+                    disabled={!!updating[source.code]}
+                    className="gap-2 text-red-400 hover:text-red-300"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Deletar
+                  </Button>
+                </div>
               </div>
             </CardHeader>
 
@@ -329,7 +425,7 @@ export default function ColetasPage() {
                   <div>
                     <p className="font-medium">Configuração necessária:</p>
                     <p className="text-muted-foreground mt-0.5">
-                      Defina no <code className="font-mono text-xs">.env</code>:{" "}
+                      Cadastre no banco:{" "}
                       {source.envVarsRequired.map((v) => (
                         <code key={v} className="font-mono text-xs bg-muted px-1 py-0.5 rounded mr-1">
                           {v}
@@ -338,6 +434,12 @@ export default function ColetasPage() {
                     </p>
                   </div>
                 </div>
+              )}
+
+              {source.configKeys.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Configurações no banco: {source.configKeys.length} chave(s)
+                </p>
               )}
 
               {/* Última execução */}
@@ -375,18 +477,25 @@ export default function ColetasPage() {
 
               {/* Erros recentes */}
               {source.recentErrors.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground font-medium">Erros recentes:</p>
-                  {source.recentErrors.map((err) => (
-                    <div
-                      key={err.id}
-                      className="text-xs text-red-400 bg-red-500/5 border border-red-500/20 rounded px-2.5 py-1.5 font-mono"
-                    >
-                      <span className="text-muted-foreground">{formatDate(err.startedAt)}: </span>
-                      {err.erro?.slice(0, 200) ?? "Erro desconhecido"}
-                    </div>
-                  ))}
-                </div>
+                <details className="group rounded-lg border border-red-500/20 bg-red-500/5">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-xs font-medium text-red-400">
+                    <span>
+                      Erros recentes ({source.recentErrors.length})
+                    </span>
+                    <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="space-y-1 border-t border-red-500/20 px-3 py-2">
+                    {source.recentErrors.map((err) => (
+                      <div
+                        key={err.id}
+                        className="rounded border border-red-500/20 bg-background/40 px-2.5 py-1.5 font-mono text-xs text-red-400"
+                      >
+                        <span className="text-muted-foreground">{formatDate(err.startedAt)}: </span>
+                        {err.erro?.slice(0, 200) ?? "Erro desconhecido"}
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </CardContent>
           </Card>

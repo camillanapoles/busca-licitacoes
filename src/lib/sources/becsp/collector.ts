@@ -15,8 +15,8 @@ import { normalizeBecSpLicitacao, type BecSpLicitacaoRaw } from "./normalizer";
 import { upsertLicitacaoBatch } from "@/lib/licitacoes/upsert";
 import { format } from "date-fns";
 
-function isConfigured(): boolean {
-  return isBecSpConfigured();
+function isConfigured(config = {}): boolean {
+  return isBecSpConfigured(config);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -74,14 +74,14 @@ function extractItems(response: BecSpApiResult): BecSpLicitacaoRaw[] {
 }
 
 async function collect(params: CollectionParams): Promise<CollectionResult> {
-  if (!isConfigured()) {
+  if (!isConfigured(params.sourceConfig)) {
     return {
       fonte: "BEC_SP",
       totalColetado: 0,
       totalNovo: 0,
       totalAtualizado: 0,
       errors: [
-        "Fonte BEC-SP ainda precisa de configuração de endpoint. Defina BEC_SP_BASE_URL no .env.",
+        "Fonte BEC-SP ainda precisa de configuração de endpoint. Informe BEC_SP_BASE_URL no cadastro da fonte.",
       ],
     };
   }
@@ -104,6 +104,7 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
     const responses = await listarLicitacoesBecSp({
       dataInicio,
       dataFim,
+      sourceConfig: params.sourceConfig,
     });
 
     const items: BecSpLicitacaoRaw[] = [];

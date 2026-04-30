@@ -22,33 +22,27 @@
  *   - Órgãos auxiliares (SIAFI/SIAPE)       -> /api-de-dados/orgaos-*
  */
 
+import type { SourceConfig } from "@/lib/sources/types";
+import {
+  sourceConfigNumber,
+  sourceConfigValue,
+} from "@/lib/sources/config";
+
 const DEFAULT_BASE = "https://api.portaldatransparencia.gov.br";
 const API_PREFIX = "/api-de-dados";
 
-const RAW_BASE = process.env.TRANSPARENCIA_BASE_URL || DEFAULT_BASE;
-
 /** Base URL sem barra final e sem o sufixo /api-de-dados (ele é adicionado no path). */
-const BASE_URL = RAW_BASE.replace(/\/$/, "").replace(/\/api-de-dados$/, "");
-
-const API_TOKEN = process.env.TRANSPARENCIA_API_TOKEN;
-const CODIGO_ORGAO_DEFAULT = process.env.TRANSPARENCIA_CODIGO_ORGAO;
+function resolveBaseUrl(config?: SourceConfig): string {
+  return sourceConfigValue(config, "TRANSPARENCIA_BASE_URL", DEFAULT_BASE)
+    .replace(/\/$/, "")
+    .replace(/\/api-de-dados$/, "");
+}
 
 export const TRANSPARENCIA_SWAGGER_URL =
-  process.env.TRANSPARENCIA_SWAGGER_URL ||
-  `${BASE_URL}/swagger-ui/index.html`;
+  `${DEFAULT_BASE}/swagger-ui/index.html`;
 
 export const TRANSPARENCIA_OPENAPI_URL =
-  process.env.TRANSPARENCIA_OPENAPI_URL || `${BASE_URL}/v3/api-docs`;
-
-const RETRY_MAX_ATTEMPTS = Number(
-  process.env.TRANSPARENCIA_RETRY_MAX_ATTEMPTS ?? "3"
-);
-const RETRY_BASE_DELAY_MS = Number(
-  process.env.TRANSPARENCIA_RETRY_BASE_DELAY_MS ?? "800"
-);
-const REQUEST_TIMEOUT_MS = Number(
-  process.env.TRANSPARENCIA_REQUEST_TIMEOUT_MS ?? "30000"
-);
+  `${DEFAULT_BASE}/v3/api-docs`;
 
 // ─── Configuração ────────────────────────────────────────────────────────────
 
@@ -56,19 +50,20 @@ const REQUEST_TIMEOUT_MS = Number(
  * Considera a fonte configurada quando há, no mínimo, base URL e token.
  * `CODIGO_ORGAO` é opcional — só é exigido por helpers que filtram por órgão.
  */
-export function isTransparenciaConfigured(): boolean {
-  return !!BASE_URL && !!API_TOKEN;
+export function isTransparenciaConfigured(config?: SourceConfig): boolean {
+  return !!resolveBaseUrl(config) && !!sourceConfigValue(config, "TRANSPARENCIA_API_TOKEN");
 }
 
-function requireToken(): string {
-  if (!API_TOKEN) {
+function requireToken(config?: SourceConfig): string {
+  const token = sourceConfigValue(config, "TRANSPARENCIA_API_TOKEN");
+  if (!token) {
     throw new Error(
-      "Fonte TRANSPARENCIA não configurada: TRANSPARENCIA_API_TOKEN está vazio. " +
+      "Fonte TRANSPARENCIA não configurada: TRANSPARENCIA_API_TOKEN está vazio no cadastro da fonte. " +
         "Solicite uma chave em https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email " +
-        "e defina TRANSPARENCIA_API_TOKEN no .env."
+        "e salve no banco de dados."
     );
   }
-  return API_TOKEN;
+  return token;
 }
 
 // ─── Helper Genérico ─────────────────────────────────────────────────────────
@@ -85,6 +80,7 @@ export interface TransparenciaFetchOptions {
   timeoutMs?: number;
   /** Número máximo de tentativas em erros transitórios. Padrão: 3. */
   maxRetries?: number;
+  sourceConfig?: SourceConfig;
 }
 
 export class TransparenciaError extends Error {
@@ -156,16 +152,28 @@ export async function consultarTransparencia<T = unknown>({
   endpoint,
   params = {},
   accept = "application/json",
-  timeoutMs = REQUEST_TIMEOUT_MS,
-  maxRetries = RETRY_MAX_ATTEMPTS,
+  timeoutMs,
+  maxRetries,
+  sourceConfig,
 }: {
   endpoint: string;
   params?: TransparenciaParams;
   accept?: string;
   timeoutMs?: number;
   maxRetries?: number;
+  sourceConfig?: SourceConfig;
 }): Promise<T> {
-  const token = requireToken();
+  const token = requireToken(sourceConfig);
+  const baseUrl = resolveBaseUrl(sourceConfig);
+  const resolvedTimeoutMs =
+    timeoutMs ?? sourceConfigNumber(sourceConfig, "TRANSPARENCIA_REQUEST_TIMEOUT_MS", 30000);
+  const resolvedMaxRetries =
+    maxRetries ?? sourceConfigNumber(sourceConfig, "TRANSPARENCIA_RETRY_MAX_ATTEMPTS", 3);
+  const retryBaseDelayMs = sourceConfigNumber(
+    sourceConfig,
+    "TRANSPARENCIA_RETRY_BASE_DELAY_MS",
+    800
+  );
 
   const normalizedEndpoint = endpoint.startsWith("/")
     ? endpoint
@@ -174,7 +182,7 @@ export async function consultarTransparencia<T = unknown>({
     ? normalizedEndpoint
     : `${API_PREFIX}${normalizedEndpoint}`;
 
-  const url = new URL(`${BASE_URL}${fullPath}`);
+  const url = new URL(`${baseUrl}${fullPath}`);
 
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== "") {
@@ -184,9 +192,9 @@ export async function consultarTransparencia<T = unknown>({
 
   let lastError: Error | null = null;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  for (let attempt = 1; attempt <= resolvedMaxRetries; attempt++) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), resolvedTimeoutMs);
 
     try {
       const response = await fetch(url.toString(), {
@@ -205,13 +213,13 @@ export async function consultarTransparencia<T = unknown>({
         const message = buildHumanError(response.status, fullPath, text);
         const transient = shouldRetryStatus(response.status);
 
-        if (transient && attempt < maxRetries) {
+        if (transient && attempt < resolvedMaxRetries) {
           const backoff =
-            RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) +
+            retryBaseDelayMs * 2 ** (attempt - 1) +
             Math.floor(Math.random() * 250);
           if (process.env.NODE_ENV !== "production") {
             console.warn(
-              `[TRANSPARENCIA] tentativa ${attempt}/${maxRetries} em ${fullPath} falhou (${response.status}). Retry em ${backoff}ms...`
+              `[TRANSPARENCIA] tentativa ${attempt}/${resolvedMaxRetries} em ${fullPath} falhou (${response.status}). Retry em ${backoff}ms...`
             );
           }
           await sleep(backoff);
@@ -270,16 +278,16 @@ export async function consultarTransparencia<T = unknown>({
         throw error;
       }
 
-      if (!isNetworkLike || attempt >= maxRetries) {
+      if (!isNetworkLike || attempt >= resolvedMaxRetries) {
         throw error;
       }
 
       const backoff =
-        RETRY_BASE_DELAY_MS * 2 ** (attempt - 1) +
+        retryBaseDelayMs * 2 ** (attempt - 1) +
         Math.floor(Math.random() * 250);
       if (process.env.NODE_ENV !== "production") {
         console.warn(
-          `[TRANSPARENCIA] tentativa ${attempt}/${maxRetries} em ${fullPath} falhou por rede/timeout. Retry em ${backoff}ms...`
+          `[TRANSPARENCIA] tentativa ${attempt}/${resolvedMaxRetries} em ${fullPath} falhou por rede/timeout. Retry em ${backoff}ms...`
         );
       }
       await sleep(backoff);
@@ -290,7 +298,7 @@ export async function consultarTransparencia<T = unknown>({
 
   throw lastError ??
     new Error(
-      `Transparência API: falha desconhecida em ${fullPath} após ${maxRetries} tentativas.`
+      `Transparência API: falha desconhecida em ${fullPath} após ${resolvedMaxRetries} tentativas.`
     );
 }
 
@@ -329,6 +337,7 @@ export interface ConsultaPaginadaOptions<T = unknown> {
   limitePaginas?: number;
   /** Função opcional para extrair a lista de uma resposta atípica. */
   extrairLista?: (data: unknown) => T[];
+  sourceConfig?: SourceConfig;
 }
 
 /**
@@ -340,6 +349,7 @@ export async function consultarTransparenciaPaginado<T = unknown>({
   params = {},
   limitePaginas = 20,
   extrairLista,
+  sourceConfig,
 }: ConsultaPaginadaOptions<T>): Promise<T[]> {
   const todos: T[] = [];
 
@@ -347,6 +357,7 @@ export async function consultarTransparenciaPaginado<T = unknown>({
     const data = await consultarTransparencia<unknown>({
       endpoint,
       params: { ...params, pagina },
+      sourceConfig,
     });
 
     const lista = extrairLista ? extrairLista(data) : extractList<T>(data);
@@ -377,17 +388,22 @@ export interface ConsultarLicitacoesParams extends JanelaDatas {
   codigoOrgao?: string;
   /** Código da modalidade (ver /licitacoes/modalidades). */
   codigoModalidade?: number | string;
+  sourceConfig?: SourceConfig;
 }
 
 /** GET /api-de-dados/licitacoes — lista de licitações do Executivo Federal. */
 export function consultarLicitacoes(params: ConsultarLicitacoesParams = {}) {
+  const { sourceConfig, ...queryParams } = params;
   return consultarTransparencia({
     endpoint: "/licitacoes",
     params: {
       pagina: 1,
-      ...params,
-      codigoOrgao: params.codigoOrgao ?? CODIGO_ORGAO_DEFAULT,
+      ...queryParams,
+      codigoOrgao:
+        params.codigoOrgao ??
+        sourceConfigValue(sourceConfig, "TRANSPARENCIA_CODIGO_ORGAO"),
     },
+    sourceConfig,
   });
 }
 
@@ -497,17 +513,22 @@ export interface ConsultarContratosParams extends JanelaDatas {
   codigoOrgao?: string;
   /** CPF/CNPJ do contratado. */
   cpfCnpjContratado?: string;
+  sourceConfig?: SourceConfig;
 }
 
 /** GET /api-de-dados/contratos — lista de contratos do Executivo Federal. */
 export function consultarContratos(params: ConsultarContratosParams = {}) {
+  const { sourceConfig, ...queryParams } = params;
   return consultarTransparencia({
     endpoint: "/contratos",
     params: {
       pagina: 1,
-      ...params,
-      codigoOrgao: params.codigoOrgao ?? CODIGO_ORGAO_DEFAULT,
+      ...queryParams,
+      codigoOrgao:
+        params.codigoOrgao ??
+        sourceConfigValue(sourceConfig, "TRANSPARENCIA_CODIGO_ORGAO"),
     },
+    sourceConfig,
   });
 }
 
@@ -620,6 +641,7 @@ export interface TransparenciaLicitacaoParams extends JanelaDatas {
   pagina?: number;
   codigoOrgao?: string;
   codigoModalidade?: number;
+  sourceConfig?: SourceConfig;
 }
 
 /**
@@ -636,8 +658,11 @@ export async function fetchLicitacoesTransparencia(
     dataInicial: params.dataInicial,
     dataFinal: params.dataFinal,
     pagina: params.pagina ?? 1,
-    codigoOrgao: params.codigoOrgao ?? CODIGO_ORGAO_DEFAULT,
+    codigoOrgao:
+      params.codigoOrgao ??
+      sourceConfigValue(params.sourceConfig, "TRANSPARENCIA_CODIGO_ORGAO"),
     codigoModalidade: params.codigoModalidade,
+    sourceConfig: params.sourceConfig,
   });
   return extractList(result);
 }

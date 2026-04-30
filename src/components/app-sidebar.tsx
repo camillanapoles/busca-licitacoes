@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BellRing, LayoutDashboard, List, Settings } from "lucide-react";
+import { BellRing, LayoutDashboard, List, Search, Settings } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -37,33 +37,39 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-full md:w-64 bg-background border-r flex-shrink-0">
-      <nav className="p-4 space-y-2 sticky top-20">
-        {links.map((link) => {
-          const Icon = link.icon;
-          const isActive = isActivePath(pathname, link.href);
+    <aside className="w-full md:w-64 md:min-h-screen bg-background border-r flex-shrink-0">
+      <div className="sticky top-0">
+        <Link href="/" className="flex h-16 items-center gap-2 border-b px-6">
+          <Search className="h-6 w-6 text-primary" />
+          <span className="font-bold text-xl tracking-tight">LicitaBusca</span>
+        </Link>
+        <nav className="p-4 space-y-2">
+          {links.map((link) => {
+            const Icon = link.icon;
+            const isActive = isActivePath(pathname, link.href);
 
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              aria-current={isActive ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted text-foreground transition-colors",
-                isActive && "bg-muted font-semibold"
-              )}
-            >
-              <Icon
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "h-5 w-5 text-muted-foreground",
-                  isActive && "text-foreground"
+                  "flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted text-foreground transition-colors",
+                  isActive && "bg-muted font-semibold"
                 )}
-              />
-              <span className="font-medium">{link.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+              >
+                <Icon
+                  className={cn(
+                    "h-5 w-5 text-muted-foreground",
+                    isActive && "text-foreground"
+                  )}
+                />
+                <span className="font-medium">{link.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
     </aside>
   );
 }

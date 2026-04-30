@@ -13,8 +13,8 @@ const AUDESP_NOT_SEARCH_API_MESSAGE =
   "TCE-SP / AUDESP não expõe endpoint público GET /licitacoes. " +
   "Use PNCP ou BEC-SP para busca pública de licitações; use AUDESP apenas para login, envio Fase IV e consulta de protocolo.";
 
-function isConfigured(): boolean {
-  return isTcespConfigured();
+function isConfigured(config = {}): boolean {
+  return isTcespConfigured(config);
 }
 
 async function collect(params: CollectionParams): Promise<CollectionResult> {

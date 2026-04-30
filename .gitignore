@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/data/raw/
+/data/extracted/
 
 # next.js
 /.next/

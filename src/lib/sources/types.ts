@@ -9,9 +9,14 @@
 export type SourceCode =
   | "PNCP"
   | "COMPRAS_GOV"
+  | "PORTAL_COMPRAS_PUBLICAS"
   | "TRANSPARENCIA"
   | "BEC_SP"
-  | "TCE_SP";
+  | "TCE_SP"
+  | "TCE_RJ"
+  | "TCE_RS";
+
+export type SourceConfig = Record<string, string>;
 
 // ─── Licitação Normalizada ───────────────────────────────────────────────────
 
@@ -59,6 +64,7 @@ export type CollectionParams = {
   page?: number;
   limit?: number;
   logId?: string;
+  sourceConfig?: SourceConfig;
 };
 
 // ─── Interface de Coletor ────────────────────────────────────────────────────
@@ -73,10 +79,10 @@ export type SourceCollector = {
   /** Nome legível da fonte */
   name: string;
   /**
-   * Indica se a fonte está configurada (variáveis de ambiente presentes).
+   * Indica se a fonte está configurada.
    * Se false, o collector retornará erro controlado sem quebrar o sistema.
    */
-  isConfigured: () => boolean;
+  isConfigured: (config?: SourceConfig) => boolean;
   /** Executa a coleta e retorna o resultado consolidado */
   collect: (params: CollectionParams) => Promise<CollectionResult>;
 };
@@ -89,4 +95,6 @@ export type SourceInfo = {
   description: string;
   isConfigured: boolean;
   envVarsRequired: string[];
+  ativo: boolean;
+  configKeys: string[];
 };

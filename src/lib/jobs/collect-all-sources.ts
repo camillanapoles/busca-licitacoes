@@ -5,7 +5,7 @@
  * Fontes não configuradas retornam erro controlado sem interromper as demais.
  */
 
-import { getAllCollectors } from "@/lib/sources/registry";
+import { getActiveSourceEntries } from "@/lib/sources/registry";
 import { collectSource } from "./collect-source";
 import type { CollectionParams, CollectionResult } from "@/lib/sources/types";
 
@@ -28,12 +28,12 @@ export async function collectAllSources(
   params: CollectionParams = {}
 ): Promise<CollectAllResult> {
   const startTime = Date.now();
-  const collectors = getAllCollectors();
+  const sourceEntries = await getActiveSourceEntries();
   const results: CollectionResult[] = [];
 
-  console.log(`[Jobs] Iniciando coleta de ${collectors.length} fontes...`);
+  console.log(`[Jobs] Iniciando coleta de ${sourceEntries.length} fontes...`);
 
-  for (const collector of collectors) {
+  for (const { collector } of sourceEntries) {
     console.log(`[Jobs] Coletando: ${collector.name}...`);
 
     try {

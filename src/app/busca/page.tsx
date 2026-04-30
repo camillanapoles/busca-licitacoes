@@ -1,11 +1,10 @@
 import { searchLicitacoes, SearchParams } from "@/lib/search";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, BellRing, Building2, MapPin, Calendar, DollarSign } from "lucide-react";
-import { redirect } from "next/navigation";
+import { BellRing, Building2, MapPin, Calendar, DollarSign } from "lucide-react";
+import { SearchFilterForm } from "./search-filter-form";
 
 export default async function BuscaPage({
   searchParams,
@@ -51,16 +50,7 @@ export default async function BuscaPage({
               <CardTitle className="text-lg">Filtros</CardTitle>
             </CardHeader>
             <CardContent>
-              <form method="GET" action="/busca" className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="q" className="text-sm font-medium">Palavra-chave</label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input id="q" name="q" defaultValue={q} placeholder="Objeto, órgão..." className="pl-9" />
-                  </div>
-                </div>
-                <Button type="submit" className="w-full">Filtrar</Button>
-              </form>
+              <SearchFilterForm q={q} />
             </CardContent>
           </Card>
         </div>

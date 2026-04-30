@@ -2,7 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { User, Mail, Shield, Calendar } from "lucide-react";
+import { User, Mail, Shield } from "lucide-react";
+import { prisma } from "@/lib/prisma";
+import { WhatsappSettingsForm } from "./whatsapp-settings-form";
 
 export default async function PerfilPage() {
   const session = await getServerSession(authOptions);
@@ -11,8 +13,18 @@ export default async function PerfilPage() {
     redirect("/login");
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      whatsappNumber: true,
+      whatsappNotificationsEnabled: true,
+      apibrasilBearerTokenEncrypted: true,
+      apibrasilDeviceTokenEncrypted: true,
+    },
+  });
+
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Configurações de Perfil</h1>
         <p className="text-muted-foreground mt-1">Gerencie suas informações e preferências de conta.</p>
@@ -53,6 +65,13 @@ export default async function PerfilPage() {
           </div>
         </CardContent>
       </Card>
+
+      <WhatsappSettingsForm
+        whatsappNumber={user?.whatsappNumber ?? ""}
+        whatsappNotificationsEnabled={user?.whatsappNotificationsEnabled ?? false}
+        hasBearerToken={Boolean(user?.apibrasilBearerTokenEncrypted)}
+        hasDeviceToken={Boolean(user?.apibrasilDeviceTokenEncrypted)}
+      />
 
       <Card className="border-destructive/20 bg-destructive/5">
         <CardHeader>

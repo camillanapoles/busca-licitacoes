@@ -1,5 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import {
+  SOURCE_DEFINITIONS,
+  buildDefaultSourceConfig,
+  sourceBaseUrlFromConfig,
+} from '../src/lib/sources/config';
 
 const prisma = new PrismaClient();
 
@@ -34,8 +39,35 @@ async function main() {
 
   console.log('Usuário comum criado/verificado:', regularUser.email);
 
+  for (const definition of Object.values(SOURCE_DEFINITIONS)) {
+    const config = buildDefaultSourceConfig(definition.code);
+    const baseUrl = sourceBaseUrlFromConfig(definition.code, config);
+    const fonteMetadata = {
+      descricao: definition.description,
+      config: config as Prisma.InputJsonObject,
+    };
+
+    await prisma.fonte.upsert({
+      where: { codigo: definition.code },
+      update: {
+        nome: definition.name,
+        ...fonteMetadata,
+        baseUrl,
+      },
+      create: {
+        nome: definition.name,
+        codigo: definition.code,
+        ...fonteMetadata,
+        baseUrl,
+        ativo: true,
+      },
+    });
+  }
+
+  console.log('Fontes de coleta criadas/verificadas no banco.');
+
   // Fake Licitações e Avisos para testar a interface
-  const aviso = await prisma.aviso.create({
+  await prisma.aviso.create({
     data: {
       userId: regularUser.id,
       nome: 'Licitações de Software',

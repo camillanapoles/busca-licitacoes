@@ -7,6 +7,7 @@
  * Exemplos:
  *   POST /api/admin/coletas/PNCP
  *   POST /api/admin/coletas/COMPRAS_GOV
+ *   POST /api/admin/coletas/PORTAL_COMPRAS_PUBLICAS
  *   POST /api/admin/coletas/TRANSPARENCIA
  *   POST /api/admin/coletas/BEC_SP
  *   POST /api/admin/coletas/TCE_SP
@@ -23,11 +24,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { collectSource } from "@/lib/jobs/collect-source";
 import { isValidSourceCode } from "@/lib/sources/registry";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const bodySchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+});
+
+const updateSchema = z.object({
+  ativo: z.boolean(),
 });
 
 export async function POST(
@@ -46,13 +52,15 @@ export async function POST(
   if (!isValidSourceCode(sourceUpper)) {
     return NextResponse.json(
       {
-        error: `Fonte "${sourceUpper}" não reconhecida. Fontes válidas: PNCP, COMPRAS_GOV, TRANSPARENCIA, BEC_SP, TCE_SP`,
+        error:
+          `Fonte "${sourceUpper}" não reconhecida. ` +
+          "Fontes válidas: PNCP, COMPRAS_GOV, PORTAL_COMPRAS_PUBLICAS, TRANSPARENCIA, BEC_SP, TCE_SP",
       },
       { status: 404 }
     );
   }
 
-  let collectParams: { startDate?: Date; endDate?: Date } = {};
+  const collectParams: { startDate?: Date; endDate?: Date } = {};
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -83,4 +91,60 @@ export async function POST(
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ source: string }> }
+) {
+  const session = await getServerSession(authOptions);
+
+  if (session?.user?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  }
+
+  const { source } = await params;
+  const sourceUpper = source.toUpperCase();
+
+  if (!isValidSourceCode(sourceUpper)) {
+    return NextResponse.json({ error: `Fonte "${sourceUpper}" não reconhecida.` }, { status: 404 });
+  }
+
+  try {
+    const parsed = updateSchema.parse(await req.json());
+    const fonte = await prisma.fonte.update({
+      where: { codigo: sourceUpper },
+      data: { ativo: parsed.ativo },
+    });
+
+    return NextResponse.json({ success: true, fonte });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ source: string }> }
+) {
+  const session = await getServerSession(authOptions);
+
+  if (session?.user?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  }
+
+  const { source } = await params;
+  const sourceUpper = source.toUpperCase();
+
+  if (!isValidSourceCode(sourceUpper)) {
+    return NextResponse.json({ error: `Fonte "${sourceUpper}" não reconhecida.` }, { status: 404 });
+  }
+
+  const result = await prisma.fonte.deleteMany({ where: { codigo: sourceUpper } });
+  if (result.count === 0) {
+    return NextResponse.json({ error: `Fonte "${sourceUpper}" não cadastrada.` }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true });
 }

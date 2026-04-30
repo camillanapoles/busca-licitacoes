@@ -52,21 +52,22 @@ import {
   TransparenciaError,
 } from "./client";
 import {
+  isSourceConfigComplete,
+  sourceConfigNumber,
+  sourceConfigValue,
+} from "@/lib/sources/config";
+import {
   normalizeTransparenciaLicitacao,
   type TransparenciaLicitacaoRaw,
 } from "./normalizer";
 
-const DEFAULT_LOOKBACK_DAYS = Number(
-  process.env.TRANSPARENCIA_LOOKBACK_DAYS ?? "90"
-);
 // API rejeita janelas > 1 mês calendário. Em fevereiro isso vira 28 dias
 // úteis. Usamos 28 para nunca esbarrar no limite, independentemente do mês.
 const MAX_WINDOW_DAYS = 28;
-const DEFAULT_MAX_PAGES = Number(process.env.TRANSPARENCIA_MAX_PAGES ?? "5");
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function isConfigured(): boolean {
-  return isTransparenciaConfigured();
+function isConfigured(config = {}): boolean {
+  return isTransparenciaConfigured(config) && isSourceConfigComplete("TRANSPARENCIA", config);
 }
 
 function describeError(err: unknown): string {
@@ -77,8 +78,8 @@ function describeError(err: unknown): string {
   return String(err);
 }
 
-function getCodigosOrgao(): string[] {
-  const raw = process.env.TRANSPARENCIA_CODIGO_ORGAO ?? "";
+function getCodigosOrgao(params: CollectionParams): string[] {
+  const raw = sourceConfigValue(params.sourceConfig, "TRANSPARENCIA_CODIGO_ORGAO");
   return raw
     .split(",")
     .map((s) => s.trim())
@@ -109,7 +110,8 @@ async function coletarOrgaoJanela(
   janela: Janela,
   startPage: number,
   maxPages: number,
-  result: CollectionResult
+  result: CollectionResult,
+  sourceConfig: CollectionParams["sourceConfig"]
 ): Promise<void> {
   const dataInicial = format(janela.inicio, "dd/MM/yyyy");
   const dataFinal = format(janela.fim, "dd/MM/yyyy");
@@ -124,6 +126,7 @@ async function coletarOrgaoJanela(
         dataFinal,
         codigoOrgao,
         pagina,
+        sourceConfig,
       });
     } catch (err) {
       result.errors.push(
@@ -160,29 +163,39 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
 
   if (!isConfigured()) {
     result.errors.push(
-      "Fonte TRANSPARENCIA não configurada. Defina TRANSPARENCIA_BASE_URL e TRANSPARENCIA_API_TOKEN no .env. " +
+      "Fonte TRANSPARENCIA não configurada. Informe TRANSPARENCIA_BASE_URL, TRANSPARENCIA_API_TOKEN e TRANSPARENCIA_CODIGO_ORGAO no cadastro da fonte. " +
         "Solicite a chave em https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email."
     );
     return result;
   }
 
-  const codigosOrgao = getCodigosOrgao();
+  const codigosOrgao = getCodigosOrgao(params);
   if (!codigosOrgao.length) {
     result.errors.push(
       "TRANSPARENCIA_CODIGO_ORGAO não configurado. O endpoint /api-de-dados/licitacoes exige " +
-        "ao menos um código SIAFI de órgão. Configure no .env (ex.: 26000 para o MEC) " +
+        "ao menos um código SIAFI de órgão. Configure no cadastro da fonte (ex.: 26000 para o MEC) " +
         "ou liste vários separados por vírgula."
     );
     return result;
   }
 
   const now = new Date();
+  const defaultLookbackDays = sourceConfigNumber(
+    params.sourceConfig,
+    "TRANSPARENCIA_LOOKBACK_DAYS",
+    90
+  );
   const start =
-    params.startDate ?? new Date(now.getTime() - DEFAULT_LOOKBACK_DAYS * DAY_MS);
+    params.startDate ?? new Date(now.getTime() - defaultLookbackDays * DAY_MS);
   const end = params.endDate ?? now;
 
   const startPage = Math.max(1, params.page ?? 1);
-  const maxPages = Math.max(1, params.limit ?? DEFAULT_MAX_PAGES);
+  const defaultMaxPages = sourceConfigNumber(
+    params.sourceConfig,
+    "TRANSPARENCIA_MAX_PAGES",
+    15
+  );
+  const maxPages = Math.max(1, params.limit ?? defaultMaxPages);
 
   const janelas = fatiarJanelas(start, end, MAX_WINDOW_DAYS);
 
@@ -193,7 +206,8 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
         janela,
         startPage,
         maxPages,
-        result
+        result,
+        params.sourceConfig
       );
     }
   }
@@ -205,7 +219,7 @@ async function collect(params: CollectionParams): Promise<CollectionResult> {
       `Nenhum registro retornado para órgão(s) [${codigosOrgao.join(", ")}] entre ${dInicial} e ${dFinal}. ` +
         "O endpoint /api-de-dados/licitacoes cobre apenas a Lei 8.666/93 e está praticamente vazio para datas recentes — " +
         "novas licitações federais (Lei 14.133/2021) são publicadas no PNCP. " +
-        "Tente aumentar TRANSPARENCIA_LOOKBACK_DAYS, usar outros códigos SIAFI em TRANSPARENCIA_CODIGO_ORGAO, " +
+        "Tente aumentar TRANSPARENCIA_LOOKBACK_DAYS, usar outros códigos SIAFI em TRANSPARENCIA_CODIGO_ORGAO no cadastro da fonte, " +
         "ou utilize a fonte PNCP para licitações novas."
     );
   }

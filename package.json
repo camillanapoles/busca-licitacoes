@@ -9,19 +9,24 @@
     "lint": "eslint",
     "db:setup": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "db:reset": "prisma migrate reset --force",
     "test:sources": "ts-node --project src/lib/sources/tests/tsconfig.json src/lib/sources/tests/test-pncp.ts",
     "test:sources:transparencia": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-transparencia.ts",
-    "test:sources:becsp": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-becsp.ts"
+    "test:sources:becsp": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-becsp.ts",
+    "test:sources:portal-compras-publicas": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-portal-compras-publicas.ts",
+    "test:sources:tcerj": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-tcerj.ts",
+    "test:sources:tcers": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-tcers.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.3",
+    "adm-zip": "^0.5.17",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "csv-parse": "^6.2.1",
     "date-fns": "^4.1.0",
+    "iconv-lite": "^0.7.2",
     "lightningcss": "^1.32.0",
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
@@ -37,6 +42,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/adm-zip": "^0.5.8",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -51,6 +57,6 @@
     "typescript": "^5"
   },
   "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts"
   }
 }
