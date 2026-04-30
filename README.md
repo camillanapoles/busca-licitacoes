@@ -43,6 +43,9 @@ Inicie o servidor de desenvolvimento:
 
 ### Prints
 
+### Pagina inicial
+<img width="1904" height="921" alt="image" src="https://github.com/user-attachments/assets/34e33e49-901e-4b87-a55c-7e36c11cd907" />
+
 ### Area do usuário
 <img width="1911" height="917" alt="image" src="https://github.com/user-attachments/assets/205c7dab-d076-4b9c-9df8-78a4abe32930" />
 
@@ -51,6 +54,10 @@ Inicie o servidor de desenvolvimento:
 
 ### Área do administrador
 <img width="1908" height="922" alt="image" src="https://github.com/user-attachments/assets/0615ebd0-b864-45d3-b9ed-40616656043b" />
+
+### Avisos integrados ao WhatsApp
+<img width="1842" height="986" alt="image" src="https://github.com/user-attachments/assets/be4ad724-867d-45d9-a7c7-9a0ed4d74062" />
+
 
 ### Fontes Disponíveis
 
