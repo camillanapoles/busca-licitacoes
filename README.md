@@ -4,7 +4,7 @@ O LicitaBusca possui uma arquitetura escalável para coletar e normalizar dados 
 
 ## Tecnologias
 
-- Next.js 15 (App Router)
+- Next.js 16 (App Router)
 - TypeScript
 - Tailwind CSS v4
 - Prisma ORM
