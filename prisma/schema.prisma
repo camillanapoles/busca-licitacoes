@@ -1,0 +1,164 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  avisos       Aviso[]
+  searchLogs   SearchLog[]
+}
+
+model Licitacao {
+  id               String   @id @default(cuid())
+  fonte            String
+  fonteId          String
+  orgao            String
+  cnpjOrgao        String?
+  uf               String?
+  municipio        String?
+  modalidade       String?
+  numeroCompra     String?
+  anoCompra        Int?
+  sequencialCompra String?
+  objeto           String   @db.Text
+  valorEstimado    Float?
+  dataPublicacao   DateTime?
+  dataFimProposta  DateTime?
+  status           String?
+  link             String?  @db.Text
+  rawPayload       Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  itens            LicitacaoItem[]
+  resultados       AvisoResultado[]
+
+  @@unique([fonte, fonteId])
+  @@index([uf])
+  @@index([municipio])
+  @@index([modalidade])
+  @@index([status])
+  @@index([dataPublicacao])
+  @@index([dataFimProposta])
+  @@index([valorEstimado])
+  
+  // Fulltext indices required by the MVP
+  @@fulltext([objeto])
+  @@fulltext([orgao])
+  @@fulltext([municipio], map: "fulltext_municipio")
+  @@fulltext([modalidade], map: "fulltext_modalidade")
+}
+
+model LicitacaoItem {
+  id            String   @id @default(cuid())
+  licitacaoId   String
+  numeroItem    Int?
+  descricao     String   @db.Text
+  quantidade    Float?
+  unidade       String?
+  valorUnitario Float?
+  valorTotal    Float?
+  rawPayload    Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  licitacao     Licitacao @relation(fields: [licitacaoId], references: [id], onDelete: Cascade)
+}
+
+enum Frequencia {
+  DIARIA
+  SEMANAL
+  MANUAL
+}
+
+model Aviso {
+  id            String   @id @default(cuid())
+  userId        String
+  nome          String
+  palavrasChave String   @db.Text
+  uf            String?
+  municipio     String?
+  modalidade    String?
+  valorMinimo   Float?
+  valorMaximo   Float?
+  frequencia    Frequencia @default(DIARIA)
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resultados    AvisoResultado[]
+}
+
+model AvisoResultado {
+  id           String   @id @default(cuid())
+  avisoId      String
+  licitacaoId  String
+  visualizado  Boolean  @default(false)
+  enviado      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  aviso        Aviso     @relation(fields: [avisoId], references: [id], onDelete: Cascade)
+  licitacao    Licitacao @relation(fields: [licitacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([avisoId, licitacaoId])
+}
+
+model ColetaLog {
+  id              String   @id @default(cuid())
+  fonte           String
+  status          String
+  tipo            String
+  startedAt       DateTime
+  finishedAt      DateTime?
+  totalColetado   Int      @default(0)
+  totalNovo       Int      @default(0)
+  totalAtualizado Int      @default(0)
+  erro            String?  @db.Text
+  metadata        Json?
+}
+
+model Fonte {
+  id        String   @id @default(cuid())
+  nome      String
+  codigo    String   @unique
+  baseUrl   String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SearchLog {
+  id              String   @id @default(cuid())
+  userId          String?
+  query           String
+  filtros         Json?
+  totalResultados Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
