@@ -1,0 +1,111 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+    inputs:
+      deploy_ref:
+        description: "Branch, tag ou SHA para deploy/rollback"
+        required: false
+        default: "develop"
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+      APP_URL: ${{ secrets.APP_URL }}
+      STAGING_APP_URL: ${{ secrets.STAGING_APP_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_ref || github.ref_name }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Migrate database
+        run: npx prisma migrate deploy
+
+      - name: Validate deploy script
+        shell: bash
+        run: |
+          if grep -q "Configure o script deploy:staging" package.json; then
+            echo "O script deploy:staging ainda está com placeholder. Atualize-o antes de usar este workflow."
+            exit 1
+          fi
+
+      - name: Deploy (provider command)
+        run: npm run deploy:staging
+
+      - name: Smoke check
+        shell: bash
+        run: |
+          if [ -z "$STAGING_APP_URL" ]; then
+            echo "Secret STAGING_APP_URL não configurado."
+            exit 1
+          fi
+
+          check_url() {
+            local url="$1"
+            local status=""
+            local attempt=1
+            local max_attempts=6
+
+            while [ "$attempt" -le "$max_attempts" ]; do
+              status=$(curl -sS --connect-timeout 10 --max-time 20 -o /tmp/smoke_body.txt -w "%{http_code}" "$url" || echo "000")
+              if [ "$status" -ge 200 ] && [ "$status" -lt 400 ]; then
+                echo "Smoke check OK: $url (status $status)"
+                return 0
+              fi
+
+              echo "Tentativa $attempt/$max_attempts falhou para $url (status $status)."
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+
+            echo "Smoke check falhou em $url após $max_attempts tentativas."
+            cat /tmp/smoke_body.txt
+            exit 1
+          }
+
+          check_url "$STAGING_APP_URL/"
+          check_url "$STAGING_APP_URL/login"
+          check_url "$STAGING_APP_URL/api/auth/session"
+
+      - name: Workflow summary
+        shell: bash
+        run: |
+          {
+            echo "## Deploy staging concluído"
+            echo ""
+            echo "- Ref: \`$(git rev-parse HEAD)\`"
+            echo "- URL staging: $STAGING_APP_URL"
+            echo "- Migrations: executadas com \`prisma migrate deploy\`"
+            echo "- Smoke checks: homepage, login e /api/auth/session"
+          } >> "$GITHUB_STEP_SUMMARY"
