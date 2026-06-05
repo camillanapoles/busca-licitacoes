@@ -2,7 +2,7 @@
   "name": "busca-licitacoes-backend-dev",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm",
   "postCreateCommand": "npm ci",
-  "postStartCommand": "if [ -f docker-compose.yml ]; then docker compose up -d mysql; fi && [ -f .env.local ] || cp .env.example .env.local",
+  "postStartCommand": "if [ -f docker-compose.yml ]; then docker compose up -d mysql || echo 'Falha ao subir mysql via docker compose'; fi; if [ ! -f .env.local ] && [ -f .env.example ]; then cp .env.example .env.local; fi",
   "forwardPorts": [3000, 3306],
   "portsAttributes": {
     "3000": {
@@ -13,10 +13,7 @@
     }
   },
   "remoteEnv": {
-    "NODE_ENV": "development",
-    "DATABASE_URL": "mysql://user@localhost:3306/database_name",
-    "NEXTAUTH_SECRET": "dev-only-change-me",
-    "APP_URL": "http://localhost:3000"
+    "NODE_ENV": "development"
   },
   "customizations": {
     "vscode": {

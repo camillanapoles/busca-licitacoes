@@ -52,6 +52,14 @@ jobs:
       - name: Migrate database
         run: npx prisma migrate deploy
 
+      - name: Validate deploy script
+        shell: bash
+        run: |
+          if grep -q "Configure o script deploy:staging" package.json; then
+            echo "O script deploy:staging ainda está com placeholder. Atualize-o antes de usar este workflow."
+            exit 1
+          fi
+
       - name: Deploy (provider command)
         run: npm run deploy:staging
 
@@ -65,14 +73,25 @@ jobs:
 
           check_url() {
             local url="$1"
-            local status
-            status=$(curl -sS -o /tmp/smoke_body.txt -w "%{http_code}" "$url")
-            if [ "$status" -lt 200 ] || [ "$status" -ge 400 ]; then
-              echo "Smoke check falhou em $url (status $status)"
-              cat /tmp/smoke_body.txt
-              exit 1
-            fi
-            echo "Smoke check OK: $url (status $status)"
+            local status=""
+            local attempt=1
+            local max_attempts=6
+
+            while [ "$attempt" -le "$max_attempts" ]; do
+              status=$(curl -sS --connect-timeout 10 --max-time 20 -o /tmp/smoke_body.txt -w "%{http_code}" "$url" || echo "000")
+              if [ "$status" -ge 200 ] && [ "$status" -lt 400 ]; then
+                echo "Smoke check OK: $url (status $status)"
+                return 0
+              fi
+
+              echo "Tentativa $attempt/$max_attempts falhou para $url (status $status)."
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+
+            echo "Smoke check falhou em $url após $max_attempts tentativas."
+            cat /tmp/smoke_body.txt
+            exit 1
           }
 
           check_url "$STAGING_APP_URL/"
