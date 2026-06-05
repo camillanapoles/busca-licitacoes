@@ -70,7 +70,7 @@ Inicie o servidor de desenvolvimento:
 
 ## Codespaces (backend-only para dev/teste)
 
-Foi adicionada a configuração em `/tmp/workspace/camillanapoles/busca-licitacoes/.devcontainer/devcontainer.json`.
+Foi adicionada a configuração em `.devcontainer/devcontainer.json`.
 
 Ao abrir no GitHub Codespaces:
 
@@ -90,7 +90,7 @@ npm run dev
 
 ## Variáveis de ambiente (sem segredos no repositório)
 
-Use o arquivo `/tmp/workspace/camillanapoles/busca-licitacoes/.env.example` como base e copie para `.env.local`:
+Use o arquivo `.env.example` como base e copie para `.env.local`:
 
 ```bash
 cp .env.example .env.local
@@ -113,14 +113,14 @@ Opcionais:
 
 ### CI
 
-Workflow: `/tmp/workspace/camillanapoles/busca-licitacoes/.github/workflows/ci.yml`
+Workflow: `.github/workflows/ci.yml`
 
 - Roda em `pull_request` e push para `main`/`develop`
 - Passos: `npm ci`, `npm run lint`, `npm run build`
 
 ### Deploy Staging/Dev
 
-Workflow: `/tmp/workspace/camillanapoles/busca-licitacoes/.github/workflows/deploy-staging.yml`
+Workflow: `.github/workflows/deploy-staging.yml`
 
 - Trigger automático: push na branch `develop`
 - Trigger manual: `workflow_dispatch` (com `deploy_ref` para deploy/rollback)
@@ -138,7 +138,9 @@ Secrets necessários no GitHub (Environment `staging`):
 - `NEXTAUTH_SECRET`
 - `APP_URL`
 - `STAGING_APP_URL`
-- `STAGING_DEPLOY_COMMAND` (comando do provedor escolhido)
+
+Script necessário no projeto:
+- `npm run deploy:staging` (configure em `package.json` com o comando do provedor escolhido)
 
 ### Rollback simples
 

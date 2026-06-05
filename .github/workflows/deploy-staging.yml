@@ -15,6 +15,9 @@ concurrency:
   group: staging-deploy
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -24,7 +27,6 @@ jobs:
       NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
       APP_URL: ${{ secrets.APP_URL }}
       STAGING_APP_URL: ${{ secrets.STAGING_APP_URL }}
-      STAGING_DEPLOY_COMMAND: ${{ secrets.STAGING_DEPLOY_COMMAND }}
 
     steps:
       - name: Checkout
@@ -51,14 +53,7 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Deploy (provider command)
-        shell: bash
-        run: |
-          if [ -z "$STAGING_DEPLOY_COMMAND" ]; then
-            echo "Secret STAGING_DEPLOY_COMMAND não configurado."
-            exit 1
-          fi
-
-          eval "$STAGING_DEPLOY_COMMAND"
+        run: npm run deploy:staging
 
       - name: Smoke check
         shell: bash

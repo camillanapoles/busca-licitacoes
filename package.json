@@ -14,7 +14,8 @@
     "test:sources:becsp": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-becsp.ts",
     "test:sources:portal-compras-publicas": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-portal-compras-publicas.ts",
     "test:sources:tcerj": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-tcerj.ts",
-    "test:sources:tcers": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-tcers.ts"
+    "test:sources:tcers": "ts-node --project src/lib/sources/tests/tsconfig.json -r dotenv/config src/lib/sources/tests/test-tcers.ts",
+    "deploy:staging": "echo 'Configure o script deploy:staging para seu provedor (Vercel/Railway/Render/AWS).' && exit 1"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
