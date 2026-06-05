@@ -96,6 +96,8 @@ Use o arquivo `.env.example` como base e copie para `.env.local`:
 cp .env.example .env.local
 ```
 
+Depois, ajuste o `DATABASE_URL` para os dados reais do seu ambiente.
+
 Obrigatórias para app/dev:
 - `DATABASE_URL`
 - `NEXTAUTH_SECRET`
@@ -140,7 +142,7 @@ Secrets necessários no GitHub (Environment `staging`):
 - `STAGING_APP_URL`
 
 Script necessário no projeto:
-- `npm run deploy:staging` (configure em `package.json` com o comando do provedor escolhido)
+- `npm run deploy:staging` (substitua o comando placeholder em `package.json` pelo comando real do provedor escolhido)
 
 ### Rollback simples
 

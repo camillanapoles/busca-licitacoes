@@ -63,9 +63,21 @@ jobs:
             exit 1
           fi
 
-          curl -fsS "$STAGING_APP_URL/" >/dev/null
-          curl -fsS "$STAGING_APP_URL/login" >/dev/null
-          curl -fsS "$STAGING_APP_URL/api/auth/session" >/dev/null
+          check_url() {
+            local url="$1"
+            local status
+            status=$(curl -sS -o /tmp/smoke_body.txt -w "%{http_code}" "$url")
+            if [ "$status" -lt 200 ] || [ "$status" -ge 400 ]; then
+              echo "Smoke check falhou em $url (status $status)"
+              cat /tmp/smoke_body.txt
+              exit 1
+            fi
+            echo "Smoke check OK: $url (status $status)"
+          }
+
+          check_url "$STAGING_APP_URL/"
+          check_url "$STAGING_APP_URL/login"
+          check_url "$STAGING_APP_URL/api/auth/session"
 
       - name: Workflow summary
         shell: bash
